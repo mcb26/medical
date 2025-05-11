@@ -1,0 +1,63 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static admin_modify %}
+
+{% block content %}
+<div id="content-main">
+    <form method="post" action="{% url 'admin:prescription-preview-series' prescription.id %}">
+        {% csrf_token %}
+        <fieldset class="module aligned">
+            <div class="form-row">
+                <label>Startdatum:</label>
+                <input type="date" name="start_date" required>
+            </div>
+            <div class="form-row">
+                <label>Uhrzeit:</label>
+                <input type="time" name="time" required>
+            </div>
+            <div class="form-row">
+                <label>Intervall (Tage):</label>
+                <input type="number" name="interval_days" value="7" min="1" required>
+            </div>
+            <div class="form-row">
+                <label>Anzahl Termine:</label>
+                <input type="number" name="number_of_appointments" value="{{ prescription.number_of_sessions }}" required>
+            </div>
+            <div class="form-row">
+                <label>Behandler:</label>
+                <select name="practitioner" required>
+                    {% for practitioner in practitioners %}
+                        <option value="{{ practitioner.id }}">{{ practitioner.get_full_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-row">
+                <label>Raum:</label>
+                <select name="room" required>
+                    {% for room in rooms %}
+                        <option value="{{ room.id }}">{{ room.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </fieldset>
+        <div class="submit-row">
+            <input type="submit" value="Vorschau anzeigen" class="default">
+        </div>
+    </form>
+</div>
+
+<style>
+    .checkbox-group {
+        display: flex;
+        gap: 1rem;
+        margin-top: 0.5rem;
+    }
+    .checkbox-group label {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+    .module h2 {
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %} 

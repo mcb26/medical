@@ -1,0 +1,28 @@
+ABRECHNUNGSDATEI
+===============================
+
+Praxis: {{ practice.name }}
+Betriebsstättennummer: {{ practice.institution_code }}
+Abrechnungszeitraum: {{ billing_cycle.start_date|date:"d.m.Y" }} - {{ billing_cycle.end_date|date:"d.m.Y" }}
+Krankenkasse: {{ billing_cycle.insurance_provider.name }} ({{ billing_cycle.insurance_provider.provider_id }})
+Erstellt am: {{ generated_at|date:"d.m.Y H:i" }}
+
+ABRECHNUNGSPOSITIONEN
+===============================
+{% for item in items %}
+Versichertennr.: {{ item.prescription.patient_insurance.insurance_number }}
+Patient: {{ item.prescription.patient.last_name }}, {{ item.prescription.patient.first_name }}
+Behandlung: {{ item.treatment.treatment_name }}
+Datum: {{ item.appointment.appointment_date|date:"d.m.Y" }}
+Betrag: {{ item.insurance_amount|floatformat:2 }} EUR
+Rezeptnr.: {{ item.prescription.id }}
+-------------------------------
+{% endfor %}
+
+ZUSAMMENFASSUNG
+===============================
+Anzahl Positionen: {{ items|length }}
+Gesamtbetrag: {{ total_amount|floatformat:2 }} EUR
+
+===============================
+Ende der Abrechnungsdatei 

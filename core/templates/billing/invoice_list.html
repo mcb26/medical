@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1>Patientenrechnungen</h1>
+    
+    <div class="actions mb-4">
+        <a href="{% url 'create-invoice' %}" class="btn btn-primary">
+            Neue Rechnung erstellen
+        </a>
+    </div>
+
+    <div class="filters mb-3">
+        <form method="get" class="form-inline">
+            <select name="status" class="form-control mr-2" onchange="this.form.submit()">
+                <option value="">Alle Status</option>
+                <option value="created" {% if request.GET.status == 'created' %}selected{% endif %}>Erstellt</option>
+                <option value="sent" {% if request.GET.status == 'sent' %}selected{% endif %}>Versendet</option>
+                <option value="paid" {% if request.GET.status == 'paid' %}selected{% endif %}>Bezahlt</option>
+                <option value="overdue" {% if request.GET.status == 'overdue' %}selected{% endif %}>Überfällig</option>
+            </select>
+        </form>
+    </div>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Rechnungsnummer</th>
+                <th>Patient</th>
+                <th>Datum</th>
+                <th>Fällig bis</th>
+                <th>Betrag</th>
+                <th>Status</th>
+                <th>Aktionen</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for invoice in invoices %}
+            <tr>
+                <td>{{ invoice.invoice_number }}</td>
+                <td>{{ invoice.patient }}</td>
+                <td>{{ invoice.invoice_date|date:"d.m.Y" }}</td>
+                <td>{{ invoice.due_date|date:"d.m.Y" }}</td>
+                <td>{{ invoice.total_amount|floatformat:2 }} €</td>
+                <td>{{ invoice.get_status_display }}</td>
+                <td>
+                    <a href="{% url 'invoice-detail' invoice.pk %}" class="btn btn-sm btn-info">Details</a>
+                    <a href="{% url 'download-invoice-pdf' invoice.pk %}" class="btn btn-sm btn-secondary">PDF</a>
+                    {% if invoice.status == 'created' or invoice.status == 'sent' %}
+                    <button class="btn btn-sm btn-success" data-invoice-id="{{ invoice.pk }}" onclick="markAsPaid(this)">
+                        Als bezahlt markieren
+                    </button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% include "partials/pagination.html" %}
+</div>
+
+<script>
+function markAsPaid(button) {
+    const invoiceId = button.dataset.invoiceId;
+    if (confirm('Rechnung als bezahlt markieren?')) {
+        const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        fetch(`/invoices/${invoiceId}/mark-paid/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrftoken,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                location.reload();
+            }
+        });
+    }
+}
+</script>
+{% endblock %} 

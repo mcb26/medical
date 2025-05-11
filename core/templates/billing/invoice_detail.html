@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1>Rechnung {{ invoice.invoice_number }}</h1>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title">Rechnungsdetails</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Patient:</strong> {{ invoice.patient }}</p>
+                    <p><strong>Rechnungsdatum:</strong> {{ invoice.invoice_date|date:"d.m.Y" }}</p>
+                    <p><strong>Fällig bis:</strong> {{ invoice.due_date|date:"d.m.Y" }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Status:</strong> {{ invoice.get_status_display }}</p>
+                    <p><strong>Gesamtbetrag:</strong> {{ invoice.total_amount|floatformat:2 }} €</p>
+                    {% if invoice.payment_date %}
+                    <p><strong>Bezahlt am:</strong> {{ invoice.payment_date|date:"d.m.Y" }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title">Abrechnungspositionen</h5>
+        </div>
+        <div class="card-body">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Datum</th>
+                        <th>Behandlung</th>
+                        <th>Rezept-Nr.</th>
+                        <th>Zuzahlung</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in invoice.billing_items.all %}
+                    <tr>
+                        <td>{{ item.appointment.appointment_date|date:"d.m.Y" }}</td>
+                        <td>{{ item.treatment.treatment_name }}</td>
+                        <td>{{ item.prescription.id }}</td>
+                        <td>{{ item.patient_copay|floatformat:2 }} €</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <a href="{% url 'download-invoice-pdf' invoice.pk %}" class="btn btn-primary">PDF herunterladen</a>
+        <a href="{% url 'invoice-list' %}" class="btn btn-secondary">Zurück zur Übersicht</a>
+        {% if invoice.status == 'created' or invoice.status == 'sent' %}
+        <button class="btn btn-success" data-invoice-id="{{ invoice.pk }}" onclick="markAsPaid(this)">
+            Als bezahlt markieren
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function markAsPaid(button) {
+    const invoiceId = button.dataset.invoiceId;
+    if (confirm('Rechnung als bezahlt markieren?')) {
+        const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        fetch(`/invoices/${invoiceId}/mark-paid/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrftoken,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                location.reload();
+            }
+        });
+    }
+}
+</script>
+{% endblock %} 

@@ -1,0 +1,21 @@
+ABRECHNUNGSÜBERSICHT
+===============================
+
+Krankenkasse: {{ insurance_provider.name }}
+Abrechnungszeitraum: {{ start_date|date:"d.m.Y" }} - {{ end_date|date:"d.m.Y" }}
+
+ABRECHNUNGSPOSITIONEN:
+-------------------------------
+{% for item in items %}
+Patient: {{ item.prescription.patient.last_name }}, {{ item.prescription.patient.first_name }}
+Versichertennummer: {{ item.prescription.patient_insurance.insurance_number }}
+Behandlung: {{ item.treatment.treatment_name }}
+Datum: {{ item.appointment.appointment_date|date:"d.m.Y" }}
+Betrag: {{ item.insurance_amount }} EUR
+-------------------------------
+{% endfor %}
+
+ZUSAMMENFASSUNG:
+===============================
+Gesamtanzahl Positionen: {{ items|length }}
+Gesamtbetrag: {{ total_amount }} EUR 

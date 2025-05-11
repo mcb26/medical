@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        .header {
+            margin-bottom: 40px;
+        }
+        .practice-info {
+            float: left;
+            width: 50%;
+        }
+        .invoice-info {
+            float: right;
+            width: 40%;
+        }
+        .patient-info {
+            clear: both;
+            margin-bottom: 30px;
+        }
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+        .items-table th, .items-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .items-table th {
+            background-color: #f5f5f5;
+        }
+        .total {
+            text-align: right;
+            margin-top: 20px;
+        }
+        .footer {
+            margin-top: 40px;
+            font-size: 11px;
+        }
+        .bank-info {
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="practice-info">
+            <strong>{{ practice.name }}</strong><br>
+            {{ practice.street_address }}<br>
+            {{ practice.postal_code }} {{ practice.city }}<br>
+            Tel: {{ practice.phone_number }}<br>
+            Email: {{ practice.email }}
+        </div>
+        <div class="invoice-info">
+            <h2>Rechnung</h2>
+            Rechnungsnummer: {{ invoice_number }}<br>
+            Datum: {{ invoice_date|date:"d.m.Y" }}<br>
+            Fällig bis: {{ due_date|date:"d.m.Y" }}
+        </div>
+    </div>
+
+    <div class="patient-info">
+        <strong>Patient:</strong><br>
+        {{ patient.first_name }} {{ patient.last_name }}<br>
+        {{ patient.street_address }}<br>
+        {{ patient.postal_code }} {{ patient.city }}
+    </div>
+
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th>Datum</th>
+                <th>Behandlung</th>
+                <th>Rezept-Nr.</th>
+                <th>Zuzahlung</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in billing_items %}
+            <tr>
+                <td>{{ item.appointment.appointment_date|date:"d.m.Y" }}</td>
+                <td>{{ item.treatment.treatment_name }}</td>
+                <td>{{ item.prescription.id }}</td>
+                <td>{{ item.patient_copay|floatformat:2 }} €</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="total">
+        <strong>Gesamtbetrag: {{ total_amount|floatformat:2 }} €</strong>
+    </div>
+
+    <div class="bank-info">
+        <strong>Bankverbindung:</strong><br>
+        {{ practice.get_bank_details_display|linebreaks }}
+    </div>
+
+    <div class="footer">
+        <p>Bitte überweisen Sie den Rechnungsbetrag unter Angabe der Rechnungsnummer bis zum {{ due_date|date:"d.m.Y" }}.</p>
+        <p>
+            {{ practice.name }} | {{ practice.street_address }} | {{ practice.postal_code }} {{ practice.city }}<br>
+            Tel: {{ practice.phone_number }} | Email: {{ practice.email }}<br>
+            Steuernummer: {{ practice.tax_number }}
+        </p>
+    </div>
+</body>
+</html> 

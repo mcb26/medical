@@ -1,0 +1,72 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div class="module">
+    <h2>{{ title }}</h2>
+    
+    <form method="post">
+        {% csrf_token %}
+        <table>
+            <thead>
+                <tr>
+                    <th>DATUM & ZEIT</th>
+                    <th>BEHANDLER</th>
+                    <th>RAUM</th>
+                    <th>STATUS</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for appointment in appointments %}
+                <tr>
+                    <td>
+                        <input type="datetime-local" 
+                               name="datetime_{{ forloop.counter0 }}"
+                               value="{{ appointment.proposed_datetime|date:'Y-m-d\TH:i' }}">
+                    </td>
+                    <td>
+                        <select name="practitioner_{{ forloop.counter0 }}" required>
+                            <option value="">Behandler wählen</option>
+                            {% for practitioner in practitioners %}
+                                <option value="{{ practitioner.id }}">{{ practitioner }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <select name="room_{{ forloop.counter0 }}" required>
+                            <option value="">Raum wählen</option>
+                            {% for room in rooms %}
+                                <option value="{{ room.id }}">{{ room.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <span style="color: #28a745;">Verfügbar</span>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        
+        <div class="submit-row">
+            <input type="submit" value="Termine erstellen">
+            <a href="../" class="button">Zurück</a>
+        </div>
+    </form>
+</div>
+
+<style>
+select {
+    min-width: 200px;
+    padding: 5px;
+    margin: 2px;
+    background-color: #333;
+    color: white;
+    border: 1px solid #666;
+}
+select option {
+    background-color: #333;
+    color: white;
+    padding: 5px;
+}
+</style>
+{% endblock %}

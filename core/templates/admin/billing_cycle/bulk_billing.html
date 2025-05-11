@@ -1,0 +1,30 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static admin_list %}
+
+{% block content %}
+<div id="content-main">
+    <div class="module">
+        <h2>Massenabrechnungen erstellen</h2>
+        <form method="post">
+            {% csrf_token %}
+            <fieldset class="module aligned">
+                <div class="form-row">
+                    <div class="field-box">
+                        <label for="start_date">Startdatum:</label>
+                        <input type="date" name="start_date" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="field-box">
+                        <label for="end_date">Enddatum:</label>
+                        <input type="date" name="end_date" required>
+                    </div>
+                </div>
+            </fieldset>
+            <div class="submit-row">
+                <input type="submit" value="Abrechnungen erstellen" class="default">
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %} 
