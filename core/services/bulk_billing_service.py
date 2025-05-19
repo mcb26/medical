@@ -348,5 +348,3 @@ start_date = date(2025, 2, 1)
 end_date = date(2025, 3, 31)
 
 print("\nTeste BulkBillingService:")
-result = BulkBillingService.create_bulk_billing_cycles(start_date, end_date)
-print(f"Result: {result}") 
