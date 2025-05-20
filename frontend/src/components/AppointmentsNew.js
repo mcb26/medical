@@ -17,7 +17,7 @@ function NewAppointment() {
     insurance: '',
     appointment_date: '',
     duration_minutes: '',
-    status: 'Planned',
+    status: 'planned',
     patient_attended: true,
     notes: '',
     session_number: 1,
@@ -70,17 +70,28 @@ function NewAppointment() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await api.post('appointments/', formData);
+      const formattedData = {
+        patient: parseInt(formData.patient),
+        practitioner: parseInt(formData.practitioner),
+        room: parseInt(formData.room),
+        treatment: parseInt(formData.treatment),
+        appointment_date: new Date(formData.appointment_date).toISOString(),
+        duration_minutes: parseInt(formData.duration_minutes),
+        status: formData.status.toLowerCase()
+      };
+
+      console.log('Sende Daten:', formattedData);
+      const response = await api.post('appointments/', formattedData);
       navigate('/appointments');
     } catch (error) {
-      console.error('Error creating appointment:', error);
+      console.error('Error creating appointment:', error.response?.data || error);
     }
   };
 
   return (
     <Box component="form" onSubmit={handleSubmit} sx={{ mt: 3, maxWidth: '800px', mx: 'auto' }}>
       <Typography variant="h4" gutterBottom>
-        Create New Appointment
+        Neuer Termin
       </Typography>
       <Grid container spacing={2}>
         <Grid item xs={12} md={6}>
@@ -206,10 +217,10 @@ function NewAppointment() {
             margin="normal"
             required
           >
-            <MenuItem value="Planned">Planned</MenuItem>
-            <MenuItem value="Completed">Completed</MenuItem>
-            <MenuItem value="Cancelled">Cancelled</MenuItem>
-            <MenuItem value="Billed">Billed</MenuItem>
+            <MenuItem value="planned">Geplant</MenuItem>
+            <MenuItem value="completed">Abgeschlossen</MenuItem>
+            <MenuItem value="cancelled">Storniert</MenuItem>
+            <MenuItem value="billed">Abgerechnet</MenuItem>
           </TextField>
 
           <FormControlLabel

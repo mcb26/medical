@@ -252,6 +252,14 @@ class Room(models.Model):
     opening_hours = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    practice = models.ForeignKey(
+        'Practice',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        default=None,
+        related_name='rooms'
+    )
 
     def __str__(self):
         return self.name
@@ -641,7 +649,7 @@ class Appointment(models.Model):
     )
     treatment = models.ForeignKey('Treatment', on_delete=models.CASCADE)
     prescription = models.ForeignKey('Prescription', on_delete=models.SET_NULL, null=True, blank=True)
-    duration_minutes = models.IntegerField(default=30)  # Default-Wert hinzugefügt
+    duration_minutes = models.IntegerField(default=30)
     notes = models.TextField(null=True, blank=True)
     room = models.ForeignKey('Room', on_delete=models.SET_NULL, null=True, blank=True)
     series_identifier = models.CharField(
@@ -659,11 +667,8 @@ class Appointment(models.Model):
 
     def clean(self):
         super().clean()
-        if self.practitioner and self.practitioner.default_room and self.practitioner.default_room.practice:
-            practice_bundesland = self.practitioner.default_room.practice.bundesland
-            validate_holiday(self.appointment_date, practice_bundesland)
-        
-        # Weitere Validierungen...
+        if self.room and self.room.practice:
+            validate_holiday(self.appointment_date, self.room.practice.bundesland)
 
     def save(self, *args, **kwargs):
         if not self.duration_minutes and self.treatment:

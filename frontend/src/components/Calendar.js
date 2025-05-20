@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import PractitionerCalendar from './PractitionerCalendar';
 import RoomsCalendar from './RoomsCalendar';
 import { ToggleButton, ToggleButtonGroup, Box, Button, Typography, IconButton, Stack } from '@mui/material';
@@ -11,6 +12,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import ViewWeekIcon from '@mui/icons-material/ViewWeek';
 import TableRowsIcon from '@mui/icons-material/TableRows';
+import AddIcon from '@mui/icons-material/Add';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 
 const allowedViews = ['resourceTimeGridDay', 'resourceTimeGridWeek', 'dayGridMonth'];
@@ -37,9 +39,11 @@ function getCurrentLabel(view, date) {
 }
 
 const Calendar = () => {
+    const navigate = useNavigate();
     const [view, setView] = useState(getInitialView);
     const [currentDate, setCurrentDate] = useState(() => localStorage.getItem('calendar_date') || new Date().toISOString().slice(0, 10));
     const [mode, setMode] = useState('rooms');
+    const [openDatePicker, setOpenDatePicker] = useState(false);
 
     const handleViewChange = (newView) => {
         if (allowedViews.includes(newView)) {
@@ -48,7 +52,10 @@ const Calendar = () => {
         }
     };
     const handleDateChange = (newDate) => {
-        const iso = newDate instanceof Date ? newDate.toISOString().slice(0, 10) : newDate;
+        if (!(newDate instanceof Date) || isNaN(newDate)) {
+            return;
+        }
+        const iso = newDate.toISOString().slice(0, 10);
         setCurrentDate(iso);
         localStorage.setItem('calendar_date', iso);
     };
@@ -57,38 +64,52 @@ const Calendar = () => {
     const handleToday = () => handleDateChange(new Date());
     const handlePrev = () => {
         const d = new Date(currentDate);
-        if (view === 'resourceTimeGridDay') d.setDate(d.getDate() - 1);
-        else if (view === 'resourceTimeGridWeek') d.setDate(d.getDate() - 7);
-        else if (view === 'dayGridMonth') d.setMonth(d.getMonth() - 1);
+        if (view === 'resourceTimeGridDay') {
+            d.setDate(d.getDate() - 1);
+        } else if (view === 'resourceTimeGridWeek') {
+            d.setDate(d.getDate() - 7);
+        } else if (view === 'dayGridMonth') {
+            d.setDate(1);
+            d.setMonth(d.getMonth() - 1);
+        }
         handleDateChange(d);
     };
     const handleNext = () => {
         const d = new Date(currentDate);
-        if (view === 'resourceTimeGridDay') d.setDate(d.getDate() + 1);
-        else if (view === 'resourceTimeGridWeek') d.setDate(d.getDate() + 7);
-        else if (view === 'dayGridMonth') d.setMonth(d.getMonth() + 1);
+        if (view === 'resourceTimeGridDay') {
+            d.setDate(d.getDate() + 1);
+        } else if (view === 'resourceTimeGridWeek') {
+            d.setDate(d.getDate() + 7);
+        } else if (view === 'dayGridMonth') {
+            d.setDate(1);
+            d.setMonth(d.getMonth() + 1);
+        }
         handleDateChange(d);
     };
 
-            return (
+    const handleAddAppointment = () => {
+        navigate('/appointments/new');
+    };
+
+    return (
         <Box>
             <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2, flexWrap: 'wrap' }}>
                 {/* Ansichtsauswahl */}
-        <ToggleButtonGroup
+                <ToggleButtonGroup
                     value={view}
-            exclusive
+                    exclusive
                     onChange={(e, v) => v && handleViewChange(v)}
-            size="small"
-        >
+                    size="small"
+                >
                     <ToggleButton value="resourceTimeGridDay"><TableRowsIcon /> Tag</ToggleButton>
                     <ToggleButton value="resourceTimeGridWeek"><ViewWeekIcon /> Woche</ToggleButton>
                     <ToggleButton value="dayGridMonth"><CalendarMonthIcon /> Monat</ToggleButton>
-        </ToggleButtonGroup>
+                </ToggleButtonGroup>
 
                 {/* Räume/Behandler Umschalter */}
-        <ToggleButtonGroup
+                <ToggleButtonGroup
                     value={mode}
-            exclusive
+                    exclusive
                     onChange={(e, v) => v && setMode(v)}
                     size="small"
                 >
@@ -96,17 +117,47 @@ const Calendar = () => {
                     <ToggleButton value="practitioners">Behandler</ToggleButton>
                 </ToggleButtonGroup>
 
+                {/* Termin anlegen Button */}
+                <Button
+                    variant="contained"
+                    color="primary"
+                    startIcon={<AddIcon />}
+                    onClick={handleAddAppointment}
+                    size="small"
+                >
+                    Termin anlegen
+                </Button>
+
                 {/* DatePicker */}
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={deLocale}>
-                    <DatePicker
-                        label="Datum wählen"
-                        value={currentDate}
-                        onChange={handleDateChange}
-                        format="dd.MM.yyyy"
-                        slotProps={{
-                            textField: { size: 'small', sx: { minWidth: 80 } }
-                        }}
-                    />
+                    <Box sx={{ position: 'relative' }}>
+                        <IconButton size="small" onClick={() => setOpenDatePicker(true)}>
+                            <CalendarMonthIcon />
+                        </IconButton>
+                        <DatePicker
+                            open={openDatePicker}
+                            onClose={() => setOpenDatePicker(false)}
+                            value={currentDate}
+                            onChange={(newDate) => {
+                                handleDateChange(newDate);
+                                setOpenDatePicker(false);
+                            }}
+                            format="dd.MM.yyyy"
+                            slotProps={{
+                                textField: {
+                                    sx: { display: 'none' }
+                                },
+                                actionBar: {
+                                    actions: ['today', 'clear'],
+                                },
+                            }}
+                            views={['year', 'month', 'day']}
+                            showDaysOutsideCurrentMonth
+                            closeOnSelect
+                            maxDate={new Date('2100-12-31')}
+                            minDate={new Date('2000-01-01')}
+                        />
+                    </Box>
                 </LocalizationProvider>
 
                 {/* Navigation */}

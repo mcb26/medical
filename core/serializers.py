@@ -156,7 +156,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
     treatment_name = serializers.CharField(source='treatment.treatment_name', read_only=True)
     practitioner_name = serializers.CharField(source='practitioner.__str__', read_only=True)
     room_name = serializers.CharField(source='room.name', read_only=True)
-    room = serializers.PrimaryKeyRelatedField(read_only=True)  # Stellt sicher, dass die room_id zurückgegeben wird
+    room = serializers.PrimaryKeyRelatedField(queryset=Room.objects.all(), required=False, allow_null=True)
     created_at = serializers.DateTimeField(format="%Y-%m-%dT%H:%M:%S", required=False)
     updated_at = serializers.DateTimeField(format="%Y-%m-%dT%H:%M:%S", required=False)
 

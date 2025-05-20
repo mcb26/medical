@@ -8,12 +8,10 @@ def validate_holiday(appointment_date, bundesland):
     """
     Überprüft, ob ein Termin auf einen Feiertag fällt
     """
-    from core.models import LocalHoliday  # Import innerhalb der Funktion
+    from core.models import LocalHoliday
     
-    # Stelle sicher, dass wir nur mit dem Datum arbeiten
     check_date = appointment_date.date()
     
-    # Prüfe auf Feiertage im entsprechenden Bundesland
     holiday = LocalHoliday.objects.filter(
         bundesland=bundesland,
         date=check_date
@@ -26,6 +24,7 @@ def validate_holiday(appointment_date, bundesland):
         )
 
 def validate_appointment_conflicts(series):
+    """Validates conflicts for a series of appointments."""
     from core.models import Appointment
     conflicts = []
     treatment_duration = series.treatment.duration_minutes
@@ -40,11 +39,12 @@ def validate_appointment_conflicts(series):
         appointment_end_time = appointment_start_time + timedelta(minutes=treatment_duration)
 
         # Überprüfe Feiertage
-        if series.practitioner and series.practitioner.default_room:
+        practice = Practice.objects.first()
+        if practice:
             try:
                 validate_holiday(
                     appointment_start_time, 
-                    series.practitioner.default_room.practice.bundesland
+                    practice.bundesland
                 )
             except ValidationError as e:
                 conflicts.append({
@@ -54,26 +54,38 @@ def validate_appointment_conflicts(series):
                 })
                 continue
 
-        # Überprüfe, ob sich der Termin mit anderen überschneidet
-        conflict_appointments = Appointment.objects.filter(
-            Q(practitioner=series.practitioner) | Q(room=series.practitioner.default_room),
-            # Prüfe, ob sich der Start des neuen Termins mit bestehenden Terminen überschneidet
-            Q(appointment_date__lt=appointment_end_time) & 
-            # Berechne die Endzeit existierender Termine dynamisch
-            Q(appointment_date__gte=appointment_start_time - timedelta(minutes=F('duration_minutes')))
+        # Überprüfe Behandler-Konflikte
+        practitioner_conflicts = Appointment.objects.filter(
+            practitioner=series.practitioner,
+            appointment_date__lt=appointment_end_time,
+            appointment_date__gt=appointment_start_time - timedelta(minutes=treatment_duration)
         )
 
-        if conflict_appointments.exists():
-            # Füge den Konflikt der Liste hinzu
+        if practitioner_conflicts.exists():
             conflicts.append({
                 'session': i + 1,
                 'date': appointment_start_time,
-                'conflicting_appointments': list(conflict_appointments),
-                'reason': 'Terminüberschneidung'
+                'conflicting_appointments': list(practitioner_conflicts),
+                'reason': 'Der Behandler hat bereits einen Termin in diesem Zeitraum'
+            })
+            continue
+
+        # Überprüfe Raum-Konflikte
+        room_conflicts = Appointment.objects.filter(
+            room=series.room,
+            appointment_date__lt=appointment_end_time,
+            appointment_date__gt=appointment_start_time - timedelta(minutes=treatment_duration)
+        )
+
+        if room_conflicts.exists():
+            conflicts.append({
+                'session': i + 1,
+                'date': appointment_start_time,
+                'conflicting_appointments': list(room_conflicts),
+                'reason': 'Der Raum ist in diesem Zeitraum bereits belegt'
             })
 
     if conflicts:
-        # Wenn Konflikte vorhanden sind, werfe eine ValidationError mit einer Beschreibung der Konflikte
         conflict_info = '\n'.join([
             f"Session {c['session']} am {c['date']}: {c['reason']}" 
             for c in conflicts
@@ -82,22 +94,33 @@ def validate_appointment_conflicts(series):
 
 def validate_conflict_for_appointment(appointment_date, duration_minutes, practitioner, room, exclude_id=None):
     """Validates that there are no conflicting appointments."""
-    from core.models import Appointment  # Import here to avoid circular import
+    from core.models import Appointment, Practice
+    practice = Practice.objects.first()
     
-    # Prüfe zuerst auf Feiertage
-    if practitioner and practitioner.default_room:
-        validate_holiday(appointment_date, practitioner.default_room.practice.bundesland)
+    # Prüfe auf Feiertage
+    validate_holiday(appointment_date, practice.bundesland)
     
     end_time = appointment_date + timedelta(minutes=duration_minutes)
     
-    conflicting_appointments = Appointment.objects.filter(
+    # Prüfe auf Überschneidungen für den Behandler
+    practitioner_conflicts = Appointment.objects.filter(
         practitioner=practitioner,
         appointment_date__lt=end_time,
         appointment_date__gt=appointment_date - timedelta(minutes=duration_minutes)
     ).exclude(id=exclude_id)
     
-    if conflicting_appointments.exists():
-        raise ValidationError('Es existiert bereits ein Termin in diesem Zeitraum')
+    # Prüfe auf Überschneidungen für den Raum
+    room_conflicts = Appointment.objects.filter(
+        room=room,
+        appointment_date__lt=end_time,
+        appointment_date__gt=appointment_date - timedelta(minutes=duration_minutes)
+    ).exclude(id=exclude_id)
+    
+    if practitioner_conflicts.exists():
+        raise ValidationError('Der Behandler hat bereits einen Termin in diesem Zeitraum')
+    
+    if room_conflicts.exists():
+        raise ValidationError('Der Raum ist in diesem Zeitraum bereits belegt')
 
 def validate_appointment_conflicts(appointment):
     """Validates appointment conflicts."""
@@ -111,7 +134,7 @@ def validate_appointment_conflicts(appointment):
 
 def validate_working_hours(practitioner, appointment_date, duration_minutes):
     """Validates that appointment is within working hours."""
-    from core.models import WorkingHour  # Import here to avoid circular import
+    from core.models import WorkingHour
     
     day_of_week = appointment_date.strftime('%A')
     working_hours = WorkingHour.objects.filter(

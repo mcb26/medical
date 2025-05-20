@@ -8,6 +8,8 @@ function PracticeSettingsDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+  const [extraStart, setExtraStart] = useState(0);
+  const [extraEnd, setExtraEnd] = useState(0);
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -27,6 +29,17 @@ function PracticeSettingsDetail() {
   if (loading) return <Typography>Lädt...</Typography>;
   if (error) return <Typography color="error">{error}</Typography>;
   if (!settings) return <Typography>Keine Einstellungen gefunden</Typography>;
+
+  const start = settings.calendar_settings.working_hours.start;
+  const end = settings.calendar_settings.working_hours.end;
+
+  function addHours(time, hours) {
+    const [h, m] = time.split(':').map(Number);
+    let newH = h + hours;
+    if (newH < 0) newH = 0;
+    if (newH > 23) newH = 23;
+    return `${String(newH).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
 
   return (
     <Box sx={{ p: 3 }}>
@@ -68,6 +81,13 @@ function PracticeSettingsDetail() {
                 Zurück
               </Button>
             </Box>
+          </Grid>
+          <Grid item xs={12}>
+            <Typography><strong>Arbeitszeiten:</strong> {start} - {end}</Typography>
+          </Grid>
+          <Grid item xs={12}>
+            <Button onClick={() => setExtraStart(extraStart + 1)}>+1h früher</Button>
+            <Button onClick={() => setExtraEnd(extraEnd + 1)}>+1h später</Button>
           </Grid>
         </Grid>
       </Paper>
