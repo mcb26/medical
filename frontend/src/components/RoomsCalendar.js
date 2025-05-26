@@ -3,7 +3,7 @@ import BaseCalendar from './BaseCalendar';
 import api from '../api/axios';
 import { useNavigate } from 'react-router-dom';
 
-const RoomsCalendar = ({ view, date, onViewChange, onDateChange }) => {
+const RoomsCalendar = ({ view, date, onViewChange, onDateChange, selectedResources, resources }) => {
     const [rooms, setRooms] = useState([]);
     const [events, setEvents] = useState([]);
     const navigate = useNavigate();
@@ -19,15 +19,36 @@ const RoomsCalendar = ({ view, date, onViewChange, onDateChange }) => {
         const token = localStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-        api.get('/rooms/', { headers }).then(res => {
-            setRooms(res.data.map(r => ({
+        // Wenn resources bereits übergeben wurden, verwende diese
+        if (resources && resources.length > 0) {
+            setRooms(resources.map(r => ({
                 id: `room-${r.id}`,
                 title: r.name,
             })));
-        });
+        } else {
+            // Sonst lade sie von der API
+            api.get('/rooms/', { headers }).then(res => {
+                setRooms(res.data.map(r => ({
+                    id: `room-${r.id}`,
+                    title: r.name,
+                })));
+            });
+        }
 
         fetchEvents();
-    }, []);
+    }, [resources]);
+
+    // Filtere die Räume basierend auf selectedResources
+    const filteredRooms = rooms.filter(room => {
+        const roomId = parseInt(room.id.split('-')[1]);
+        return selectedResources.includes(roomId);
+    });
+
+    // Filtere die Events basierend auf selectedResources
+    const filteredEvents = events.filter(event => {
+        const roomId = event.room;
+        return selectedResources.includes(roomId);
+    });
 
     // Handler für Drag & Drop
     const handleEventDrop = async (info) => {
@@ -64,12 +85,13 @@ const RoomsCalendar = ({ view, date, onViewChange, onDateChange }) => {
 
     return (
         <BaseCalendar
-            resources={rooms}
-            events={events.map(ev => ({
+            resources={filteredRooms}
+            events={filteredEvents.map(ev => ({
                 ...ev,
                 id: ev.id,
                 title: ev.treatment_name || "Termin",
                 start: ev.appointment_date,
+                end: new Date(new Date(ev.appointment_date).getTime() + (ev.duration_minutes || 30) * 60000).toISOString(),
                 resourceId: `room-${ev.room}`
             }))}
             resourceType="rooms"

@@ -1190,46 +1190,122 @@ class PracticeViewSet(viewsets.ModelViewSet):
 @permission_classes([IsAuthenticated])
 def create_appointment_series(request, prescription_id):
     try:
+        # Validiere Verordnung
         prescription = get_object_or_404(Prescription, id=prescription_id)
         
-        # Logging für Debugging
-        logger.debug(f"Received request data: {request.data}")
+        # Validiere Request-Daten
+        if not request.data or 'appointments' not in request.data:
+            return Response(
+                {'error': 'Keine Termine zum Erstellen übergeben'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        appointments_data = request.data.get('appointments', [])
+        if not appointments_data:
+            return Response(
+                {'error': 'Keine Termine zum Erstellen übergeben'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
-        # Datum korrekt parsen
-        start_date = request.data.get('start_date')
-        if isinstance(start_date, str):
-            try:
-                start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
-            except ValueError:
+        created_appointments = []
+        for appointment_data in appointments_data:
+            # Validiere erforderliche Felder
+            required_fields = ['practitioner', 'room', 'appointment_date']
+            missing_fields = [field for field in required_fields if field not in appointment_data]
+            if missing_fields:
                 return Response(
-                    {"error": "Ungültiges Datumsformat. Bitte YYYY-MM-DD verwenden."},
+                    {'error': f'Fehlende Felder: {", ".join(missing_fields)}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validiere Datum und Zeit
+            try:
+                # Extrahiere Datum und Zeit aus dem appointment_date
+                date_str = appointment_data['appointment_date'].split('T')[0]
+                time_str = appointment_data['appointment_date'].split('T')[1]
+                
+                # Erstelle datetime-Objekt
+                appointment_datetime = make_aware(
+                    datetime.strptime(f"{date_str} {time_str}", '%Y-%m-%d %H:%M:%S')
+                )
+                
+                # Validiere Behandler und Raum
+                try:
+                    practitioner = Practitioner.objects.get(id=appointment_data['practitioner'])
+                    room = Room.objects.get(id=appointment_data['room'])
+                except (Practitioner.DoesNotExist, Room.DoesNotExist):
+                    return Response(
+                        {'error': 'Behandler oder Raum nicht gefunden'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Validiere Arbeitszeiten
+                if not is_within_practice_hours(appointment_datetime):
+                    return Response(
+                        {'error': 'Der Termin liegt außerhalb der Praxisöffnungszeiten'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Validiere Behandler-Verfügbarkeit
+                if not is_practitioner_available(practitioner, appointment_datetime):
+                    return Response(
+                        {'error': 'Der Behandler ist zu diesem Zeitpunkt nicht verfügbar'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Validiere Raum-Verfügbarkeit
+                if not is_room_available(room, appointment_datetime):
+                    return Response(
+                        {'error': 'Der Raum ist zu diesem Zeitpunkt nicht verfügbar'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+            except (ValueError, TypeError) as e:
+                logger.error(f"Datumsparsing-Fehler: {str(e)}, Datum: {appointment_data['appointment_date']}")
+                return Response(
+                    {'error': f'Ungültiges Datumsformat: {appointment_data["appointment_date"]}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Erstelle Termin
+            try:
+                appointment = Appointment.objects.create(
+                    prescription=prescription,
+                    patient=prescription.patient,
+                    practitioner=practitioner,
+                    room=room,
+                    appointment_date=appointment_datetime,
+                    duration_minutes=appointment_data.get('duration_minutes', 30),
+                    status='planned',
+                    treatment=prescription.treatment_1
+                )
+                created_appointments.append(AppointmentSerializer(appointment).data)
+            except Exception as e:
+                logger.error(f"Fehler beim Erstellen des Termins: {str(e)}")
+                return Response(
+                    {'error': f'Fehler beim Erstellen des Termins: {str(e)}'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
         
-        config = {
-            'start_date': start_date,
-            'interval_days': int(request.data.get('interval_days', 7)),
-            'number_of_appointments': int(request.data.get('number_of_appointments', 1)),
-            'preferred_practitioner': request.data.get('preferred_practitioner'),
-            'preferred_room': request.data.get('preferred_room')
-        }
-        
-        appointments = AppointmentSeriesService.create_series(prescription_id, config)
+        # Aktualisiere Verordnungsstatus
+        if prescription.status == 'Open':
+            prescription.status = 'In_Progress'
+            prescription.save()
         
         return Response({
-            'message': 'Terminserie erfolgreich erstellt',
-            'appointment_count': len(appointments)
+            'message': f'{len(created_appointments)} Termine wurden erfolgreich erstellt',
+            'appointments': created_appointments
         }, status=status.HTTP_201_CREATED)
         
-    except ValueError as e:
+    except Prescription.DoesNotExist:
         return Response(
-            {"error": str(e)},
-            status=status.HTTP_400_BAD_REQUEST
+            {'error': 'Verordnung nicht gefunden'},
+            status=status.HTTP_404_NOT_FOUND
         )
     except Exception as e:
-        logger.exception("Error creating appointment series")
+        logger.error(f"Fehler beim Erstellen der Terminserie: {str(e)}")
         return Response(
-            {"error": str(e)},
+            {'error': str(e)},
             status=status.HTTP_400_BAD_REQUEST
         )
 

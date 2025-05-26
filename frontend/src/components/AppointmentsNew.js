@@ -23,6 +23,7 @@ function NewAppointment() {
     session_number: 1,
     total_sessions: 1,
   });
+  const [roundStartTime, setRoundStartTime] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -70,12 +71,19 @@ function NewAppointment() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      let appointmentDate = new Date(formData.appointment_date);
+      if (roundStartTime) {
+        // Runde Minuten auf 00 oder 30
+        let minutes = appointmentDate.getMinutes();
+        let roundedMinutes = minutes < 30 ? 0 : 30;
+        appointmentDate.setMinutes(roundedMinutes, 0, 0);
+      }
       const formattedData = {
         patient: parseInt(formData.patient),
         practitioner: parseInt(formData.practitioner),
         room: parseInt(formData.room),
         treatment: parseInt(formData.treatment),
-        appointment_date: new Date(formData.appointment_date).toISOString(),
+        appointment_date: appointmentDate.toISOString(),
         duration_minutes: parseInt(formData.duration_minutes),
         status: formData.status.toLowerCase()
       };
@@ -94,183 +102,234 @@ function NewAppointment() {
         Neuer Termin
       </Typography>
       <Grid container spacing={2}>
-        <Grid item xs={12} md={6}>
-          <TextField
-            select
-            label="Patient"
-            name="patient"
-            value={formData.patient}
-            onChange={handleChange}
-            fullWidth
-            margin="normal"
-            required
-          >
-            {patients.map((patient) => (
-              <MenuItem key={patient.id} value={patient.id}>
-                {patient.first_name} {patient.last_name}
-              </MenuItem>
-            ))}
-          </TextField>
-
-          <TextField
-            select
-            label="Practitioner"
-            name="practitioner"
-            value={formData.practitioner}
-            onChange={handleChange}
-            fullWidth
-            margin="normal"
-            required
-          >
-            {practitioners.map((practitioner) => (
-              <MenuItem key={practitioner.id} value={practitioner.id}>
-                {practitioner.first_name} {practitioner.last_name}
-              </MenuItem>
-            ))}
-          </TextField>
-
-          <TextField
-            select
-            label="Raum"
-            name="room"
-            value={formData.room}
-            onChange={handleChange}
-            fullWidth
-            margin="normal"
-            required
-          >
-            {rooms && rooms.length > 0 ? (
-              rooms.map((room) => (
-                <MenuItem key={room.id} value={room.id}>
-                  {room.name || room.room_name}
+        {/* Erste Zeile: Patient, Practitioner, Raum, Treatment */}
+        <Grid container item spacing={2}>
+          <Grid item xs={12} md={3}>
+            <TextField
+              select
+              label="Patient"
+              name="patient"
+              value={formData.patient}
+              onChange={handleChange}
+              fullWidth
+              margin="normal"
+              required
+            >
+              {patients.map((patient) => (
+                <MenuItem key={patient.id} value={patient.id}>
+                  {patient.first_name} {patient.last_name}
                 </MenuItem>
-              ))
-            ) : (
-              <MenuItem disabled>Keine Räume verfügbar</MenuItem>
-            )}
-          </TextField>
-
-          <TextField
-            select
-            label="Treatment"
-            name="treatment"
-            value={formData.treatment}
-            onChange={handleChange}
-            fullWidth
-            margin="normal"
-            required
-          >
-            {treatments.map((treatment) => (
-              <MenuItem key={treatment.id} value={treatment.id}>
-                {treatment.treatment_name}
-              </MenuItem>
-            ))}
-          </TextField>
-
-          <TextField
-            select
-            label="Insurance"
-            name="insurance"
-            value={formData.insurance}
-            onChange={handleChange}
-            fullWidth
-            margin="normal"
-          >
-            {insurances.map((insurance) => (
-              <MenuItem key={insurance.id} value={insurance.id}>
-                {insurance.name}
-              </MenuItem>
-            ))}
-          </TextField>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <TextField
+              select
+              label="Therapeuut"
+              name="practitioner"
+              value={formData.practitioner}
+              onChange={handleChange}
+              fullWidth
+              margin="normal"
+              required
+            >
+              {practitioners.map((practitioner) => (
+                <MenuItem key={practitioner.id} value={practitioner.id}>
+                  {practitioner.first_name} {practitioner.last_name}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <TextField
+              select
+              label="Raum"
+              name="room"
+              value={formData.room}
+              onChange={handleChange}
+              fullWidth
+              margin="normal"
+              required
+            >
+              {rooms && rooms.length > 0 ? (
+                rooms.map((room) => (
+                  <MenuItem key={room.id} value={room.id}>
+                    {room.name || room.room_name}
+                  </MenuItem>
+                ))
+              ) : (
+                <MenuItem disabled>Keine Räume verfügbar</MenuItem>
+              )}
+            </TextField>
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <TextField
+              select
+              label="Behandlung"
+              name="treatment"
+              value={formData.treatment}
+              onChange={handleChange}
+              fullWidth
+              margin="normal"
+              required
+            >
+              {treatments.map((treatment) => (
+                <MenuItem key={treatment.id} value={treatment.id}>
+                  {treatment.treatment_name}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
         </Grid>
-
-        <Grid item xs={12} md={6}>
-          <TextField
-            label="Appointment Date"
-            type="datetime-local"
-            name="appointment_date"
-            value={formData.appointment_date}
-            onChange={handleChange}
-            fullWidth
-            margin="normal"
-            required
-            InputLabelProps={{ shrink: true }}
-          />
-
-          <TextField
-            label="Duration (minutes)"
-            name="duration_minutes"
-            value={formData.duration_minutes}
-            onChange={handleChange}
-            fullWidth
-            margin="normal"
-            InputProps={{ readOnly: true }}
-          />
-
-          <TextField
-            select
-            label="Status"
-            name="status"
-            value={formData.status}
-            onChange={handleChange}
-            fullWidth
-            margin="normal"
-            required
-          >
-            <MenuItem value="planned">Geplant</MenuItem>
-            <MenuItem value="completed">Abgeschlossen</MenuItem>
-            <MenuItem value="cancelled">Storniert</MenuItem>
-            <MenuItem value="billed">Abgerechnet</MenuItem>
-          </TextField>
-
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={formData.patient_attended}
-                onChange={handleCheckboxChange}
-                name="patient_attended"
-              />
-            }
-            label="Patient Attended"
-            sx={{ marginY: 1 }}
-          />
-
-          <TextField
-            label="Notes"
-            name="notes"
-            value={formData.notes}
-            onChange={handleChange}
-            fullWidth
-            margin="normal"
-            multiline
-            rows={3}
-          />
-
-          <TextField
-            label="Session Number"
-            type="number"
-            name="session_number"
-            value={formData.session_number}
-            onChange={handleChange}
-            fullWidth
-            margin="normal"
-          />
-
-          <TextField
-            label="Total Sessions"
-            type="number"
-            name="total_sessions"
-            value={formData.total_sessions}
-            onChange={handleChange}
-            fullWidth
-            margin="normal"
-          />
+        {/* Zweite Zeile: Datum und Dauer */}
+        <Grid container item spacing={2}>
+          <Grid item xs={12} md={6}>
+            <TextField
+              label="Datum und und Uhrzeit"
+              type="datetime-local"
+              name="appointment_date"
+              value={formData.appointment_date}
+              onChange={handleChange}
+              fullWidth
+              margin="normal"
+              required
+              InputLabelProps={{ shrink: true }}
+            />
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <TextField
+              label="Dauer"
+              name="duration_minutes"
+              value={formData.duration_minutes}
+              onChange={handleChange}
+              fullWidth
+              margin="normal"
+              InputProps={{ readOnly: true }}
+            />
+          </Grid>
+        </Grid>
+        {/* Dritte Zeile: Status und Insurance */}
+        <Grid container item spacing={2}>
+          <Grid item xs={12} md={6}>
+            <TextField
+              select
+              label="Status"
+              name="status"
+              value={formData.status}
+              onChange={handleChange}
+              fullWidth
+              margin="normal"
+              required
+            >
+              <MenuItem value="planned">Geplant</MenuItem>
+              <MenuItem value="completed">Abgeschlossen</MenuItem>
+              <MenuItem value="cancelled">Storniert</MenuItem>
+              <MenuItem value="billed">Abgerechnet</MenuItem>
+            </TextField>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <TextField
+              select
+              label="Versicherung"
+              name="insurance"
+              value={formData.insurance}
+              onChange={handleChange}
+              fullWidth
+              margin="normal"
+            >
+              {insurances.map((insurance) => (
+                <MenuItem key={insurance.id} value={insurance.id}>
+                  {insurance.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+        </Grid>
+        {/* Vierte Zeile: Checkboxen und Notizen */}
+        <Grid container item spacing={2} alignItems="center">
+          <Grid item xs={12} md={4}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={formData.patient_attended}
+                  onChange={handleCheckboxChange}
+                  name="patient_attended"
+                />
+              }
+              label="Patient erschienen"
+              sx={{ marginY: 1 }}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={roundStartTime}
+                  onChange={e => setRoundStartTime(e.target.checked)}
+                  name="roundStartTime"
+                />
+              }
+              label="Startzeit runden"
+              sx={{ marginY: 1 }}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <TextField
+              label="Bemerkung"
+              name="notes"
+              value={formData.notes}
+              onChange={handleChange}
+              fullWidth
+              margin="normal"
+              multiline
+              rows={3}
+            />
+          </Grid>
+        </Grid>
+        {/* Fünfte Zeile: Session Number und Total Sessions */}
+        <Grid container item spacing={2}>
+          <Grid item xs={12} md={6}>
+            <TextField
+              label="Terminnummer"
+              type="number"
+              name="session_number"
+              value={formData.session_number}
+              onChange={handleChange}
+              fullWidth
+              margin="normal"
+            />
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <TextField
+              label="Anzahl der Termine der Verordnung"
+              type="number"
+              name="total_sessions"
+              value={formData.total_sessions}
+              onChange={handleChange}
+              fullWidth
+              margin="normal"
+            />
+          </Grid>
         </Grid>
       </Grid>
-
-      <Button type="submit" variant="contained" color="primary" fullWidth sx={{ mt: 2 }}>
-        Create Appointment
-      </Button>
+      <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+        <Button
+          type="submit"
+          variant="contained"
+          color="primary"
+          fullWidth
+        >
+          Termin erstellen
+        </Button>
+        <Button
+          variant="outlined"
+          color="secondary"
+          fullWidth
+          onClick={() => navigate('/appointments')}
+        >
+          Abbrechen
+        </Button>
+      </Box>
     </Box>
   );
 }

@@ -10,11 +10,11 @@ from .views.views import (
     TreatmentViewSet, CategoryViewSet, AppointmentViewSet, BillingCycleViewSet,
     PrescriptionViewSet, ICDCodeViewSet, CalendarSettingsView, UserProfileView,
     CreateAppointmentsFromPrescriptionView, PatientDemographicsView, TreatmentStatsView,
-    AppointmentStatsView, GenerateAppointmentsPreviewView, DashboardStatsView,
+    AppointmentStatsView, DashboardStatsView,
     UserDetailView, PracticeViewSet, BundeslandViewSet, WorkingHourViewSet,
     export_billing_cycle,
-    create_appointment_series,
-    DiagnosisGroupViewSet, SurchargeViewSet, LocalHolidayViewSet
+    DiagnosisGroupViewSet, SurchargeViewSet, LocalHolidayViewSet,
+    create_appointment_series
 )
 from .views.billing_views import (
     PatientInvoiceListView,
@@ -113,11 +113,6 @@ urlpatterns = [
          BillingCycleViewSet.as_view({'get': 'items'}), 
          name='billing-cycle-items'),
     path('billing-cycles/<int:pk>/export/', export_billing_cycle, name='export-billing-cycle'),
-    path(
-        'admin/core/prescription/<int:prescription_id>/preview_series/',
-        GenerateAppointmentsPreviewView.as_view(),
-        name='preview_appointment_series'
-    ),
     
     # Router URLs zuletzt
     path('', include(router.urls)),

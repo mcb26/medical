@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import {
   Box,
   TextField,
@@ -22,6 +22,7 @@ import { format } from 'date-fns';
 function AppointmentSeries() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { series_identifier } = useParams();
   const searchParams = new URLSearchParams(location.search);
   const prescriptionId = searchParams.get('prescription');
 
@@ -39,6 +40,7 @@ function AppointmentSeries() {
   const [practitioners, setPractitioners] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [error, setError] = useState('');
+  const [seriesAppointments, setSeriesAppointments] = useState([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -60,6 +62,20 @@ function AppointmentSeries() {
 
     fetchData();
   }, []);
+
+  // Serie-Termine laden, wenn series_identifier vorhanden
+  useEffect(() => {
+    const fetchSeriesAppointments = async () => {
+      if (!series_identifier) return;
+      try {
+        const response = await api.get(`/appointments/?series_identifier=${series_identifier}`);
+        setSeriesAppointments(response.data);
+      } catch (error) {
+        setError('Fehler beim Laden der Terminserie');
+      }
+    };
+    fetchSeriesAppointments();
+  }, [series_identifier]);
 
   // Neue Funktion zum Behandeln der Verordnungsauswahl
   const handlePrescriptionChange = (prescriptionId) => {
@@ -115,6 +131,38 @@ function AppointmentSeries() {
         <Typography variant="h5" gutterBottom>
           Terminserie erstellen
         </Typography>
+
+        {series_identifier && (
+          <Box mb={3}>
+            <Typography variant="h6">Termine dieser Serie</Typography>
+            {seriesAppointments.length === 0 ? (
+              <Typography color="text.secondary">Keine Termine gefunden.</Typography>
+            ) : (
+              <Grid container spacing={2}>
+                {seriesAppointments.map((appt) => (
+                  <Grid item xs={12} md={6} key={appt.id}>
+                    <Paper sx={{ p: 2 }}>
+                      <Typography variant="subtitle1">
+                        {new Date(appt.appointment_date).toLocaleString('de-DE', { dateStyle: 'full', timeStyle: 'short' })}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {appt.treatment_name} | {appt.practitioner_name}
+                      </Typography>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        sx={{ mt: 1 }}
+                        onClick={() => navigate(`/appointments/${appt.id}`)}
+                      >
+                        Zum Termin
+                      </Button>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+            )}
+          </Box>
+        )}
 
         {error && (
           <Typography color="error" sx={{ mb: 2 }}>

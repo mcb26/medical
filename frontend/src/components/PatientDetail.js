@@ -319,13 +319,16 @@ function PatientDetail() {
                   <CardContent>
                     <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
                       <Event sx={{ mr: 1 }} />
-                      Aktuelle Termine
+                      Nächste Termine
                     </Typography>
                     <List>
                       {appointments.slice(0, 3).map((appointment) => (
                         <ListItem
                           key={appointment.id}
+                          component="div"
+                          onClick={() => handleAppointmentClick(appointment.id)}
                           sx={{
+                            cursor: 'pointer',
                             borderLeft: 6,
                             borderColor: 
                               appointment.status === 'confirmed' ? 'success.main' :
@@ -367,7 +370,10 @@ function PatientDetail() {
                   {appointments.map((appointment) => (
                     <ListItem
                       key={appointment.id}
+                      component="div"
+                      onClick={() => handleAppointmentClick(appointment.id)}
                       sx={{
+                        cursor: 'pointer',
                         borderLeft: 6,
                         borderColor: 
                           appointment.status === 'confirmed' ? 'success.main' :

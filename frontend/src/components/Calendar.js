@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PractitionerCalendar from './PractitionerCalendar';
 import RoomsCalendar from './RoomsCalendar';
-import { ToggleButton, ToggleButtonGroup, Box, Button, Typography, IconButton, Stack } from '@mui/material';
+import { ToggleButton, ToggleButtonGroup, Box, Button, Typography, IconButton, Stack, Select, MenuItem, FormControl, InputLabel, Chip, OutlinedInput, Checkbox, ListItemText, ListSubheader, Divider } from '@mui/material';
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import deLocale from 'date-fns/locale/de';
@@ -14,6 +14,7 @@ import ViewWeekIcon from '@mui/icons-material/ViewWeek';
 import TableRowsIcon from '@mui/icons-material/TableRows';
 import AddIcon from '@mui/icons-material/Add';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import api from '../api/axios';
 
 const allowedViews = ['resourceTimeGridDay', 'resourceTimeGridWeek', 'dayGridMonth'];
 const getInitialView = () => {
@@ -44,6 +45,53 @@ const Calendar = () => {
     const [currentDate, setCurrentDate] = useState(() => localStorage.getItem('calendar_date') || new Date().toISOString().slice(0, 10));
     const [mode, setMode] = useState('rooms');
     const [openDatePicker, setOpenDatePicker] = useState(false);
+    const [selectedResources, setSelectedResources] = useState(() => {
+        const stored = localStorage.getItem(`selected_${mode}`);
+        return stored ? JSON.parse(stored) : [];
+    });
+    const [resources, setResources] = useState([]);
+
+    // Lade Ressourcen (Räume oder Behandler) beim Start und wenn sich der Modus ändert
+    useEffect(() => {
+        const fetchResources = async () => {
+            try {
+                const endpoint = mode === 'rooms' ? '/rooms/' : '/practitioners/';
+                const response = await api.get(endpoint);
+                setResources(response.data);
+                
+                // Lade gespeicherte Auswahl aus dem localStorage
+                const stored = localStorage.getItem(`selected_${mode}`);
+                if (stored) {
+                    const parsedStored = JSON.parse(stored);
+                    // Stelle sicher, dass nur gültige IDs ausgewählt sind
+                    const validIds = response.data.map(r => r.id);
+                    setSelectedResources(parsedStored.filter(id => validIds.includes(id)));
+                } else {
+                    // Wenn keine Auswahl gespeichert ist, wähle alle aus
+                    setSelectedResources(response.data.map(r => r.id));
+                }
+            } catch (error) {
+                console.error('Fehler beim Laden der Ressourcen:', error);
+            }
+        };
+        fetchResources();
+    }, [mode]);
+
+    // Speichere Auswahl im localStorage wenn sie sich ändert
+    useEffect(() => {
+        if (selectedResources.length > 0) {
+            localStorage.setItem(`selected_${mode}`, JSON.stringify(selectedResources));
+        }
+    }, [selectedResources, mode]);
+
+    const handleResourceChange = (event) => {
+        const {
+            target: { value },
+        } = event;
+        setSelectedResources(
+            typeof value === 'string' ? value.split(',') : value,
+        );
+    };
 
     const handleViewChange = (newView) => {
         if (allowedViews.includes(newView)) {
@@ -117,6 +165,83 @@ const Calendar = () => {
                     <ToggleButton value="practitioners">Behandler</ToggleButton>
                 </ToggleButtonGroup>
 
+                {/* Ressourcen-Auswahl Dropdown */}
+                <FormControl sx={{ minWidth: 200 }} size="small">
+                    <InputLabel id="resources-select-label">
+                        {mode === 'rooms' ? 'Räume' : 'Behandler'}
+                    </InputLabel>
+                    <Select
+                        labelId="resources-select-label"
+                        multiple
+                        value={selectedResources}
+                        onChange={handleResourceChange}
+                        input={<OutlinedInput label={mode === 'rooms' ? 'Räume' : 'Behandler'} />}
+                        renderValue={(selected) => (
+                            <Typography variant="body2">
+                                {selected.length} {mode === 'rooms' ? 'Räume' : 'Behandler'} ausgewählt
+                            </Typography>
+                        )}
+                        MenuProps={{
+                            PaperProps: {
+                                style: {
+                                    maxHeight: 400,
+                                    width: 250
+                                }
+                            }
+                        }}
+                    >
+                        <ListSubheader>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Typography variant="subtitle2">
+                                    {selectedResources.length} ausgewählt
+                                </Typography>
+                                <Button
+                                    size="small"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedResources(resources.map(r => r.id));
+                                    }}
+                                >
+                                    Alle
+                                </Button>
+                                <Button
+                                    size="small"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedResources([]);
+                                    }}
+                                >
+                                    Keine
+                                </Button>
+                            </Box>
+                        </ListSubheader>
+                        <Divider />
+                        {resources.map((resource) => (
+                            <MenuItem 
+                                key={resource.id} 
+                                value={resource.id}
+                                sx={{
+                                    py: 0.5,
+                                    '&:hover': {
+                                        backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                                    }
+                                }}
+                            >
+                                <Checkbox 
+                                    checked={selectedResources.includes(resource.id)}
+                                    size="small"
+                                />
+                                <ListItemText 
+                                    primary={mode === 'rooms' ? resource.name : `${resource.first_name} ${resource.last_name}`}
+                                    primaryTypographyProps={{
+                                        variant: 'body2'
+                                    }}
+                                />
+                            </MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+
                 {/* Termin anlegen Button */}
                 <Button
                     variant="contained"
@@ -178,6 +303,8 @@ const Calendar = () => {
                     date={currentDate}
                     onViewChange={handleViewChange}
                     onDateChange={handleDateChange}
+                    selectedResources={selectedResources}
+                    resources={resources}
                 />
             ) : (
                 <PractitionerCalendar
@@ -185,6 +312,8 @@ const Calendar = () => {
                     date={currentDate}
                     onViewChange={handleViewChange}
                     onDateChange={handleDateChange}
+                    selectedResources={selectedResources}
+                    resources={resources}
                 />
             )}
         </Box>

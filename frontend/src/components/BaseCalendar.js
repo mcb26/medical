@@ -18,9 +18,21 @@ function addHoursToTimeString(time, hours) {
     return `${String(newH).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
 }
 
+// Hilfsfunktion: Rundet ein Date-Objekt auf das nächste erlaubte Intervall (00, 20, 30, 40)
+function roundToAllowedMinutes(date) {
+    const allowed = [0, 20, 30, 40];
+    let minutes = date.getMinutes();
+    let closest = allowed.reduce((prev, curr) => Math.abs(curr - minutes) < Math.abs(prev - minutes) ? curr : prev);
+    date.setMinutes(closest);
+    date.setSeconds(0);
+    date.setMilliseconds(0);
+    return date;
+}
+
 const BaseCalendar = ({
     resources,
     events,
+    backgroundEvents = [],
     resourceType, // "rooms" oder "practitioners"
     view,
     date,
@@ -78,6 +90,18 @@ const BaseCalendar = ({
         lastClickRef.current = { id: info.event.id, time: now };
     };
 
+    const handleEventDrop = (info) => {
+        info.event.setStart(roundToAllowedMinutes(new Date(info.event.start)));
+        info.event.setEnd(roundToAllowedMinutes(new Date(info.event.end)));
+        if (props.onEventDrop) props.onEventDrop(info);
+    };
+
+    const handleEventResize = (info) => {
+        info.event.setStart(roundToAllowedMinutes(new Date(info.event.start)));
+        info.event.setEnd(roundToAllowedMinutes(new Date(info.event.end)));
+        if (props.onEventResize) props.onEventResize(info);
+    };
+
     return (
         <Box>
             <FullCalendar
@@ -88,16 +112,29 @@ const BaseCalendar = ({
                 schedulerLicenseKey="GPL-My-Project-Is-Open-Source"
                 locale={deLocale}
                 resources={resources}
-                events={events}
+                events={[...events, ...backgroundEvents]}
                 eventClick={handleEventClick}
-                eventDrop={props.onEventDrop}
-                eventResize={props.onEventResize}
+                eventDrop={handleEventDrop}
+                eventResize={handleEventResize}
                 editable={true}
                 resourceAreaHeaderContent={resourceType === 'rooms' ? "Räume" : "Behandler"}
                 headerToolbar={false}
                 slotMinTime={slotMinTime}
                 slotMaxTime={slotMaxTime}
                 height={calendarHeight}
+                slotDuration="00:30:00"
+                slotLabelInterval="00:30:00"
+                snapDuration="00:30:00"
+                slotLabelFormat={{ hour: 'numeric', minute: '2-digit', hour12: false }}
+                allDayText="Info"
+                eventContent={(arg) => (
+                    <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 8 }}>
+                        <strong>{arg.event._def.extendedProps.treatment_name || "–"}</strong>
+                        <span style={{ fontSize: '0.9em', color: '#333', marginLeft: 6 }}>
+                            {arg.event._def.extendedProps.patient_name || "–"}
+                        </span>
+                    </div>
+                )}
                 {...restProps}
                 datesSet={(arg) => {
                     // Ansicht und Datum an Parent melden

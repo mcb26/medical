@@ -41,6 +41,7 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import deLocale from '@fullcalendar/core/locales/de';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
+import AppointmentSeriesPreview from './AppointmentSeriesPreview';
 
 function PrescriptionDetail() {
   const { id } = useParams();
@@ -51,6 +52,7 @@ function PrescriptionDetail() {
   const [rooms, setRooms] = useState([]);
   const [practitioners, setPractitioners] = useState([]);
   const [appointments, setAppointments] = useState([]);
+  const [showSeriesPreview, setShowSeriesPreview] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -108,7 +110,24 @@ function PrescriptionDetail() {
   };
 
   const handleCreateSeries = () => {
-    navigate(`/appointments/series/new?prescription=${id}`);
+    setShowSeriesPreview(true);
+  };
+
+  const handleSeriesConfirm = async (config) => {
+    try {
+      await api.post(`/appointments/series/${prescription.id}/`, config);
+      setShowSeriesPreview(false);
+      // Aktualisiere die Verordnungsdaten
+      const response = await api.get(`/prescriptions/${id}/`);
+      setPrescription(response.data);
+    } catch (error) {
+      console.error('Fehler beim Erstellen der Terminserie:', error);
+      setError('Fehler beim Erstellen der Terminserie');
+    }
+  };
+
+  const handleSeriesCancel = () => {
+    setShowSeriesPreview(false);
   };
 
   const renderCheckboxField = (checked, label) => (
@@ -156,6 +175,16 @@ function PrescriptionDetail() {
       <Box sx={{ p: 3 }}>
         <Alert severity="info">Verordnung nicht gefunden</Alert>
       </Box>
+    );
+  }
+
+  if (showSeriesPreview) {
+    return (
+      <AppointmentSeriesPreview
+        prescription={prescription}
+        onConfirm={handleSeriesConfirm}
+        onCancel={handleSeriesCancel}
+      />
     );
   }
 

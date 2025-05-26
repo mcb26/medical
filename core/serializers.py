@@ -162,26 +162,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Appointment
-        fields = [
-            'id',
-            'patient',
-            'patient_name',
-            'practitioner',
-            'practitioner_name',
-            'treatment',
-            'treatment_name',
-            'prescription',
-            'appointment_date',
-            'duration_minutes',
-            'status',
-            'notes',
-            'room',
-            'room_name',
-            'series_identifier',
-            'is_recurring',
-            'created_at',
-            'updated_at'
-        ]
+        fields = '__all__'
 
 class AppointmentSeriesSerializer(serializers.Serializer):
     prescription_id = serializers.IntegerField()

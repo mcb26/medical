@@ -3,7 +3,7 @@ import BaseCalendar from './BaseCalendar';
 import api from '../api/axios';
 import { useNavigate } from 'react-router-dom';
 
-const PractitionerCalendar = ({ view, date, onViewChange, onDateChange }) => {
+const PractitionerCalendar = ({ view, date, onViewChange, onDateChange, selectedResources, resources }) => {
     const [practitioners, setPractitioners] = useState([]);
     const [events, setEvents] = useState([]);
     const navigate = useNavigate();
@@ -19,15 +19,36 @@ const PractitionerCalendar = ({ view, date, onViewChange, onDateChange }) => {
         const token = localStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-        api.get('/practitioners/', { headers }).then(res => {
-            setPractitioners(res.data.map(p => ({
+        // Wenn resources bereits übergeben wurden, verwende diese
+        if (resources && resources.length > 0) {
+            setPractitioners(resources.map(p => ({
                 id: `practitioner-${p.id}`,
                 title: `${p.first_name} ${p.last_name}`,
             })));
-        });
+        } else {
+            // Sonst lade sie von der API
+            api.get('/practitioners/', { headers }).then(res => {
+                setPractitioners(res.data.map(p => ({
+                    id: `practitioner-${p.id}`,
+                    title: `${p.first_name} ${p.last_name}`,
+                })));
+            });
+        }
 
         fetchEvents();
-    }, []);
+    }, [resources]);
+
+    // Filtere die Behandler basierend auf selectedResources
+    const filteredPractitioners = practitioners.filter(practitioner => {
+        const practitionerId = parseInt(practitioner.id.split('-')[1]);
+        return selectedResources.includes(practitionerId);
+    });
+
+    // Filtere die Events basierend auf selectedResources
+    const filteredEvents = events.filter(event => {
+        const practitionerId = event.practitioner;
+        return selectedResources.includes(practitionerId);
+    });
 
     // Handler für Drag & Drop
     const handleEventDrop = async (info) => {
@@ -65,25 +86,21 @@ const PractitionerCalendar = ({ view, date, onViewChange, onDateChange }) => {
 
     return (
         <BaseCalendar
-            resources={practitioners}
-            events={events.map(ev => ({
+            resources={filteredPractitioners}
+            events={filteredEvents.map(ev => ({
                 ...ev,
                 id: ev.id,
                 title: ev.treatment_name || "Termin",
                 start: ev.appointment_date,
+                end: new Date(new Date(ev.appointment_date).getTime() + (ev.duration_minutes || 30) * 60000).toISOString(),
                 resourceId: `practitioner-${ev.practitioner}`
             }))}
-            resourceType="practitioners"
-            calendarKey="practitioners"
             view={view}
             date={date}
             onViewChange={onViewChange}
             onDateChange={onDateChange}
-            onEventDrop={handleEventDrop}
-            onEventResize={handleEventResize}
-            onEventDoubleClick={handleEventDoubleClick}
         />
     );
 };
 
-export default PractitionerCalendar; 
+export default PractitionerCalendar;
