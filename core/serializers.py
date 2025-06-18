@@ -31,7 +31,8 @@ from .models import (
     WorkingHour,
     Practice,
     BillingItem,
-    Raetsel
+    Raetsel,
+    Absence
 )
 
 User = get_user_model()
@@ -55,8 +56,18 @@ class ICDCodeSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = '__all__'
-        extra_kwargs = {'password': {'write_only': True}}
+        fields = [
+            'id',
+            'username',
+            'email',
+            'first_name',
+            'last_name',
+            'role',
+            'department',
+            'default_practitioner',
+            'date_joined',
+            'last_login',
+        ]
 
 class InsuranceProviderGroupSerializer(serializers.ModelSerializer):
     class Meta:
@@ -221,11 +232,11 @@ class BillingCycleSerializer(serializers.ModelSerializer):
         ]
 
 class PrescriptionSerializer(serializers.ModelSerializer):
+    treatment_1 = serializers.PrimaryKeyRelatedField(queryset=Treatment.objects.all())
     patient_name = serializers.SerializerMethodField()
     patient_birth_date = serializers.SerializerMethodField()
     insurance_number = serializers.SerializerMethodField()
     doctor_name = serializers.SerializerMethodField()
-    treatment_1_name = serializers.CharField(source='treatment_1.treatment_name', read_only=True)
     treatment_2_name = serializers.CharField(source='treatment_2.treatment_name', read_only=True, allow_null=True)
     treatment_3_name = serializers.CharField(source='treatment_3.treatment_name', read_only=True, allow_null=True)
     all_treatment_names = serializers.SerializerMethodField()
@@ -243,7 +254,6 @@ class PrescriptionSerializer(serializers.ModelSerializer):
             'doctor',
             'doctor_name',
             'treatment_1',
-            'treatment_1_name',
             'treatment_2',
             'treatment_2_name',
             'treatment_3',
@@ -265,6 +275,18 @@ class PrescriptionSerializer(serializers.ModelSerializer):
             'therapy_report_required',
             'prescription_date'
         ]
+
+    def validate_treatment_1(self, value):
+        if not value:
+            raise serializers.ValidationError("Eine Behandlung muss ausgewählt werden")
+        return value
+
+    def validate(self, data):
+        if not data.get('treatment_1'):
+            raise serializers.ValidationError({
+                'treatment_1': 'Eine Behandlung muss ausgewählt werden'
+            })
+        return data
 
     def get_patient_name(self, obj):
         try:
@@ -426,3 +448,8 @@ class RaetselSerializer(serializers.ModelSerializer):
         model = Raetsel
         fields = ['id', 'name', 'gitterbreite', 'erstellt_am', 'aktiv', 'gitter']
         read_only_fields = ['id', 'erstellt_am']
+
+class AbsenceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Absence
+        fields = '__all__'

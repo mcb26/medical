@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Box, 
@@ -11,8 +11,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
-  TableRow,
-  Chip
+  TableRow
 } from '@mui/material';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -26,11 +25,7 @@ function BillingCycleDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchBillingCycle();
-  }, [id]);
-
-  const fetchBillingCycle = async () => {
+  const fetchBillingCycle = useCallback(async () => {
     try {
       console.log('Fetching billing cycle:', id);
       const cycleResponse = await api.get(`/billing-cycles/${id}/`);
@@ -48,7 +43,11 @@ function BillingCycleDetail() {
       setError(`Fehler beim Laden der Abrechnungsdaten: ${error.message}`);
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    fetchBillingCycle();
+  }, [id, fetchBillingCycle]);
 
   const handleExport = async () => {
     try {

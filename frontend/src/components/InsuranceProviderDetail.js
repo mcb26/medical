@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -28,11 +28,7 @@ function InsuranceProviderDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    fetchProvider();
-  }, [id]);
-
-  const fetchProvider = async () => {
+  const fetchProvider = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -47,7 +43,11 @@ function InsuranceProviderDetail() {
         navigate('/login');
       }
     }
-  };
+  }, [id, navigate]);
+
+  useEffect(() => {
+    fetchProvider();
+  }, [fetchProvider]);
 
   const handleDelete = async () => {
     if (window.confirm('Sind Sie sicher, dass Sie diese Krankenkasse löschen möchten?')) {

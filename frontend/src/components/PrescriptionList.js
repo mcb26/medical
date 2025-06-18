@@ -129,53 +129,46 @@ function PrescriptionList() {
   }
 
   return (
-    <Box sx={{ height: 'calc(100vh - 80px)', p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4">Verordnungen</Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => navigate('/prescriptions/new')}
-        >
-          Neue Verordnung
-        </Button>
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <Box component="main" sx={{ flexGrow: 1, p: 0 }}>
+        <Box sx={{ mx: 0 }}>
+          <Paper elevation={3} sx={{ borderRadius: 2, height: 'calc(100vh - 180px)' }}>
+            <DataGrid
+              rows={prescriptions}
+              columns={columns}
+              loading={loading}
+              slots={{
+                toolbar: GridToolbar,
+              }}
+              slotProps={{
+                toolbar: {
+                  showQuickFilter: true,
+                  quickFilterProps: { debounceMs: 500 },
+                },
+              }}
+              initialState={{
+                pagination: {
+                  paginationModel: {
+                    pageSize: 25,
+                  },
+                },
+              }}
+              pageSizeOptions={[10, 25, 50, 100]}
+              checkboxSelection
+              onRowClick={handleRowClick}
+              disableRowSelectionOnClick={false}
+              sx={{
+                '& .MuiDataGrid-row': {
+                  cursor: 'pointer',
+                  '&:hover': {
+                    backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                  },
+                },
+              }}
+            />
+          </Paper>
+        </Box>
       </Box>
-
-      <Paper sx={{ height: 'calc(100% - 60px)', width: '100%' }}>
-        <DataGrid
-          rows={prescriptions}
-          columns={columns}
-          loading={loading}
-          slots={{
-            toolbar: GridToolbar,
-          }}
-          slotProps={{
-            toolbar: {
-              showQuickFilter: true,
-              quickFilterProps: { debounceMs: 500 },
-            },
-          }}
-          initialState={{
-            pagination: {
-              paginationModel: {
-                pageSize: 25,
-              },
-            },
-          }}
-          pageSizeOptions={[10, 25, 50, 100]}
-          checkboxSelection
-          onRowClick={handleRowClick}
-          disableRowSelectionOnClick={false}
-          sx={{
-            '& .MuiDataGrid-row': {
-              cursor: 'pointer',
-              '&:hover': {
-                backgroundColor: 'rgba(0, 0, 0, 0.04)',
-              },
-            },
-          }}
-        />
-      </Paper>
     </Box>
   );
 }

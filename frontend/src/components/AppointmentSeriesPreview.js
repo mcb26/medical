@@ -32,11 +32,16 @@ function AppointmentSeriesPreview({ prescription, onConfirm, onCancel }) {
   const [startDate, setStartDate] = useState('');
   const [startTime, setStartTime] = useState('09:00');
   const [frequency, setFrequency] = useState('weekly');
-  const [selectedDays, setSelectedDays] = useState([]);
   const [previewAppointments, setPreviewAppointments] = useState([]);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
+  // Behandlungsauswahl
+  const [selectedTreatment, setSelectedTreatment] = useState('');
+  const [treatmentOptions, setTreatmentOptions] = useState([]);
+  const [treatment, setTreatment] = useState(null);
+
+  // Lade Behandler und Räume
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -53,125 +58,107 @@ function AppointmentSeriesPreview({ prescription, onConfirm, onCancel }) {
     fetchData();
   }, []);
 
+  // Lade Behandlungsoptionen aus der Verordnung
+  useEffect(() => {
+    const options = [];
+    if (prescription.treatment_1) options.push(prescription.treatment_1);
+    if (prescription.treatment_2) options.push(prescription.treatment_2);
+    if (prescription.treatment_3) options.push(prescription.treatment_3);
+    setTreatmentOptions(options);
+    if (options.length > 0) setSelectedTreatment(options[0]);
+  }, [prescription]);
+
+  // Lade Details zur gewählten Behandlung
+  useEffect(() => {
+    const fetchTreatment = async () => {
+      if (selectedTreatment) {
+        try {
+          const res = await api.get(`/treatments/${selectedTreatment}/`);
+          setTreatment(res.data);
+        } catch (err) {
+          setError('Fehler beim Laden der Behandlungsdetails');
+        }
+      } else {
+        setTreatment(null);
+      }
+    };
+    fetchTreatment();
+  }, [selectedTreatment]);
+
   const generatePreview = () => {
     if (!selectedPractitioner || !selectedRoom || !startDate) {
       setError('Bitte füllen Sie alle erforderlichen Felder aus');
       return;
     }
-
-    try {
-      const appointments = [];
-      const startDateTime = parseISO(`${startDate}T${startTime}`);
-      const intervalDays = frequency === 'weekly' ? 7 : 1;
-      const days = frequency === 'weekly' ? selectedDays : [0, 1, 2, 3, 4]; // Bei täglich alle Werktage
-
-      // Stelle sicher, dass die Behandlung vorhanden ist
-      if (!prescription.treatment_1) {
-        setError('Keine Behandlung in der Verordnung gefunden');
-        return;
-      }
-
-      for (let i = 0; i < prescription.number_of_sessions; i++) {
-        const appointmentDate = addDays(startDateTime, i * intervalDays);
-        const appointment = {
-          appointment_date: appointmentDate.toISOString(),
-          practitioner: parseInt(selectedPractitioner),
-          room: parseInt(selectedRoom),
-          duration_minutes: prescription.treatment_1?.duration_minutes || 30,
-          treatment: parseInt(prescription.treatment_1),
-          prescription: parseInt(prescription.id)
-        };
-        appointments.push(appointment);
-      }
-
-      console.log('Generierte Termine:', appointments);
-      setPreviewAppointments(appointments);
-      setError(null);
-    } catch (error) {
-      console.error('Fehler beim Generieren der Vorschau:', error);
-      setError('Fehler beim Generieren der Vorschau');
+    if (!selectedTreatment || !treatment) {
+      setError('Bitte wählen Sie eine Behandlung aus');
+      return;
     }
+    if (!prescription.number_of_sessions || prescription.number_of_sessions < 1) {
+      setError('Die Anzahl der Sitzungen muss mindestens 1 betragen');
+      return;
+    }
+    const durationMinutes = treatment.duration_minutes || 30;
+    if (!durationMinutes || durationMinutes < 1) {
+      setError('Die Behandlungsdauer ist nicht gültig');
+      return;
+    }
+
+    const appointments = [];
+    const startDateTime = parseISO(`${startDate}T${startTime}`);
+    const intervalDays = frequency === 'weekly' ? 7 : 1;
+
+    for (let i = 0; i < prescription.number_of_sessions; i++) {
+      const appointmentDate = addDays(startDateTime, i * intervalDays);
+      appointments.push({
+        appointment_date: appointmentDate.toISOString(),
+        practitioner: parseInt(selectedPractitioner),
+        room: parseInt(selectedRoom),
+        duration_minutes: durationMinutes,
+        treatment: treatment.id,
+        prescription: parseInt(prescription.id),
+        patient: parseInt(prescription.patient)
+      });
+    }
+    setPreviewAppointments(appointments);
+    setError(null);
   };
 
   const handleConfirm = async () => {
-    if (!previewAppointments.length) {
-        setError('Bitte generieren Sie zuerst eine Vorschau der Termine');
-        return;
+    if (!selectedTreatment || !treatment) {
+      setError('Bitte wählen Sie eine Behandlung aus');
+      return;
+    }
+    if (!selectedPractitioner || !selectedRoom || !startDate) {
+      setError('Bitte füllen Sie alle erforderlichen Felder aus');
+      return;
+    }
+    if (!prescription.number_of_sessions || prescription.number_of_sessions < 1) {
+      setError('Die Anzahl der Sitzungen muss mindestens 1 betragen');
+      return;
     }
 
-    // Validiere die Termine
-    const invalidAppointments = previewAppointments.filter(
-        app => !app.practitioner || !app.room || !app.appointment_date
-    );
-    if (invalidAppointments.length > 0) {
-        setError('Bitte füllen Sie alle erforderlichen Felder aus');
-        return;
-    }
+    const requestData = {
+      prescription: parseInt(prescription.id),
+      start_date: startDate, // Format: YYYY-MM-DD
+      frequency: frequency === 'weekly' ? 7 : 1,
+      practitioner_id: parseInt(selectedPractitioner),
+      room_id: parseInt(selectedRoom),
+      treatment_id: treatment.id,
+      number_of_sessions: prescription.number_of_sessions
+    };
 
     try {
-        console.log('Prescription Data:', prescription);
-        console.log('Treatment 1:', prescription.treatment_1);
-        console.log('Treatment 1 Name:', prescription.treatment_1_name);
-
-        // Formatiere die Termine für die API
-        const formattedAppointments = previewAppointments.map(app => {
-            const date = new Date(app.appointment_date);
-            const yyyy = date.getFullYear();
-            const mm = String(date.getMonth() + 1).padStart(2, '0');
-            const dd = String(date.getDate()).padStart(2, '0');
-            const hh = String(date.getHours()).padStart(2, '0');
-            const min = String(date.getMinutes()).padStart(2, '0');
-            
-            return {
-                patient: prescription.patient,
-                practitioner: parseInt(app.practitioner),
-                room: parseInt(app.room),
-                appointment_date: `${yyyy}-${mm}-${dd} ${hh}:${min}:00`,
-                duration_minutes: app.duration_minutes || 30,
-                status: 'planned',
-                prescription: parseInt(prescription.id),
-                treatment: parseInt(prescription.treatment_1)
-            };
-        });
-
-        console.log('Sende Termine:', formattedAppointments);
-
-        const requestData = { 
-            appointments: formattedAppointments,
-            series_identifier: `series_${Date.now()}`,
-            prescription: parseInt(prescription.id),
-            start_date: startDate,
-            time: startTime,
-            frequency: frequency === 'weekly' ? 7 : 1,
-            practitioner_id: parseInt(selectedPractitioner),
-            room_id: parseInt(selectedRoom),
-            days: frequency === 'weekly' ? selectedDays : [0, 1, 2, 3, 4]
-        };
-
-        console.log('Request Data:', requestData);
-
-        const response = await api.post(
-            `/prescriptions/${prescription.id}/create-series/`,
-            requestData
-        );
-
-        if (response.status === 201) {
-            setSuccess('Termine wurden erfolgreich erstellt');
-            onConfirm(response.data.appointments);
-        }
+      const response = await api.post(
+        `/prescriptions/${prescription.id}/create-series/`,
+        requestData
+      );
+      if (response.status === 201) {
+        setSuccess('Termine wurden erfolgreich erstellt');
+        onConfirm(response.data.appointments);
+      }
     } catch (error) {
-        console.error('Fehler beim Erstellen der Termine:', error);
-        if (error.response?.data) {
-            console.error('Fehlerdetails:', error.response.data);
-            console.error('Request Data:', error.config?.data);
-            setError(
-                typeof error.response.data === 'string' 
-                    ? error.response.data 
-                    : error.response.data.error || 'Fehler beim Erstellen der Termine'
-            );
-        } else {
-            setError('Fehler beim Erstellen der Termine');
-        }
+      setError(JSON.stringify(error.response?.data));
     }
   };
 
@@ -274,24 +261,24 @@ function AppointmentSeriesPreview({ prescription, onConfirm, onCancel }) {
           </FormControl>
         </Grid>
 
-        {frequency === 'weekly' && (
-          <Grid item xs={12} md={6}>
-            <FormControl fullWidth>
-              <InputLabel>Wochentage</InputLabel>
-              <Select
-                multiple
-                value={selectedDays}
-                onChange={(e) => setSelectedDays(e.target.value)}
-              >
-                <MenuItem value={0}>Montag</MenuItem>
-                <MenuItem value={1}>Dienstag</MenuItem>
-                <MenuItem value={2}>Mittwoch</MenuItem>
-                <MenuItem value={3}>Donnerstag</MenuItem>
-                <MenuItem value={4}>Freitag</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-        )}
+        <Grid item xs={12} md={6}>
+          <FormControl fullWidth>
+            <InputLabel>Behandlung</InputLabel>
+            <Select
+              value={selectedTreatment}
+              onChange={(e) => setSelectedTreatment(e.target.value)}
+            >
+              {treatmentOptions.map((id) => (
+                <MenuItem key={id} value={id}>
+                  {/* Behandlungstitel dynamisch laden */}
+                  {id && (
+                    <TreatmentName treatmentId={id} />
+                  )}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
       </Grid>
 
       <Button
@@ -322,7 +309,7 @@ function AppointmentSeriesPreview({ prescription, onConfirm, onCancel }) {
                       <TextField
                         type="date"
                         value={format(new Date(appointment.appointment_date), 'yyyy-MM-dd')}
-                        onChange={(e) => handleEditAppointment(index, 'appointment_date', 
+                        onChange={(e) => handleEditAppointment(index, 'appointment_date',
                           new Date(`${e.target.value}T${format(new Date(appointment.appointment_date), 'HH:mm')}`).toISOString()
                         )}
                         InputLabelProps={{ shrink: true }}
@@ -389,6 +376,19 @@ function AppointmentSeriesPreview({ prescription, onConfirm, onCancel }) {
       )}
     </Box>
   );
+}
+
+// Hilfskomponente für Behandlungstitel
+function TreatmentName({ treatmentId }) {
+  const [name, setName] = useState('');
+  useEffect(() => {
+    let mounted = true;
+    api.get(`/treatments/${treatmentId}/`).then(res => {
+      if (mounted) setName(res.data.treatment_name);
+    });
+    return () => { mounted = false; };
+  }, [treatmentId]);
+  return name || treatmentId;
 }
 
 export default AppointmentSeriesPreview; 

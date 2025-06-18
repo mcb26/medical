@@ -14,7 +14,8 @@ from .views.views import (
     UserDetailView, PracticeViewSet, BundeslandViewSet, WorkingHourViewSet,
     export_billing_cycle,
     DiagnosisGroupViewSet, SurchargeViewSet, LocalHolidayViewSet,
-    create_appointment_series
+    create_appointment_series,
+    AbsenceViewSet
 )
 from .views.billing_views import (
     PatientInvoiceListView,
@@ -50,6 +51,7 @@ router.register(r'prescriptions', PrescriptionViewSet)
 router.register(r'practice', PracticeViewSet, basename='practice')
 router.register(r'bundeslaender', BundeslandViewSet, basename='bundesland')
 router.register(r'working-hours', WorkingHourViewSet)
+router.register(r'absences', AbsenceViewSet, basename='absence')
 
 urlpatterns = [
     # Spezifische Routen zuerst

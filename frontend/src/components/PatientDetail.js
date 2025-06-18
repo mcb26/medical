@@ -22,7 +22,12 @@ import {
   ListItemText,
   ListItemIcon,
   IconButton,
-  Button
+  Button,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell
 } from '@mui/material';
 import {
   Person,
@@ -38,7 +43,8 @@ import {
   AccessTime,
   Edit,
   ExpandLess,
-  ExpandMore
+  ExpandMore,
+  Timeline
 } from '@mui/icons-material';
 
 // TabPanel Komponente
@@ -178,293 +184,353 @@ function PatientDetail() {
   if (!patient) return <Alert severity="info">Kein Patient gefunden</Alert>;
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      {loading ? (
-        <Box display="flex" justifyContent="center">
-          <CircularProgress />
-        </Box>
-      ) : error ? (
-        <Alert severity="error">{error}</Alert>
-      ) : patient ? (
-        <>
-          {/* Header-Bereich */}
-          <Paper elevation={3} sx={{ p: 3, mb: 3, borderRadius: 2 }}>
-            <Grid container spacing={3} alignItems="center">
-              <Grid item>
-                <Avatar
-                  sx={{
-                    width: 80,
-                    height: 80,
-                    bgcolor: 'primary.main',
-                    fontSize: '2rem'
-                  }}
-                >
-                  {`${patient.first_name?.[0]}${patient.last_name?.[0]}`}
-                </Avatar>
-              </Grid>
-              <Grid item xs>
-                <Typography variant="h4" gutterBottom>
-                  {`${patient.first_name} ${patient.last_name}`}
-                </Typography>
-                <Box display="flex" gap={1}>
-                  <Chip
-                    icon={<CalendarToday />}
-                    label={`Geb. ${new Date(patient.dob).toLocaleDateString('de-DE')}`}
-                    variant="outlined"
-                  />
-                  <Chip
-                    icon={<LocalHospital />}
-                    label={patient.insurance_provider || 'Keine Versicherung'}
-                    color="primary"
-                    variant="outlined"
-                  />
-                </Box>
-              </Grid>
-              <Grid item>
-                <Button
-                  variant="contained"
-                  startIcon={<Edit />}
-                  onClick={() => navigate(`/patients/${id}/edit`)}
-                >
-                  Bearbeiten
-                </Button>
-              </Grid>
-            </Grid>
-          </Paper>
-
-          {/* Tabs-Navigation */}
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-            <Tabs value={tabValue} onChange={handleTabChange}>
-              <Tab label="Übersicht" />
-              <Tab label="Termine" />
-              <Tab label="Verordnungen" />
-              <Tab label="Dokumente" />
-            </Tabs>
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      {/* Main Content */}
+      <Box component="main" sx={{ flexGrow: 1, p: 0 }}>
+        {loading ? (
+          <Box display="flex" justifyContent="center" mt={4}>
+            <CircularProgress />
           </Box>
+        ) : error ? (
+          <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>
+        ) : patient ? (
+          <Box sx={{ mx: 0 }}>
+            {/* Patient Header */}
+            <Paper elevation={3} sx={{ p: 3, mb: 3, borderRadius: 2, backgroundColor: '#f5f5f5' }}>
+              <Grid container spacing={3} alignItems="center">
+                <Grid item>
+                  <Avatar
+                    sx={{
+                      width: 80,
+                      height: 80,
+                      bgcolor: 'primary.main',
+                      fontSize: '2rem'
+                    }}
+                  >
+                    {`${patient.first_name?.[0]}${patient.last_name?.[0]}`}
+                  </Avatar>
+                </Grid>
+                <Grid item xs>
+                  <Typography variant="h4" gutterBottom>
+                    {`${patient.first_name} ${patient.last_name}`}
+                  </Typography>
+                  <Box display="flex" gap={1}>
+                    <Chip
+                      icon={<CalendarToday />}
+                      label={`Geb. ${new Date(patient.dob).toLocaleDateString('de-DE')}`}
+                      variant="outlined"
+                    />
+                    <Chip
+                      icon={<LocalHospital />}
+                      label={patient.insurance_provider || 'Keine Versicherung'}
+                      color="primary"
+                      variant="outlined"
+                    />
+                  </Box>
+                </Grid>
+                <Grid item>
+                  <Button
+                    variant="contained"
+                    startIcon={<Edit />}
+                    onClick={() => navigate(`/patients/${id}/edit`)}
+                  >
+                    Bearbeiten
+                  </Button>
+                </Grid>
+              </Grid>
+            </Paper>
 
-          {/* Übersicht Tab */}
-          <TabPanel value={tabValue} index={0}>
-            <Grid container spacing={3}>
-              {/* Kontaktinformationen */}
-              <Grid item xs={12} md={6}>
-                <Card elevation={3}>
+            {/* Quick Stats */}
+            <Grid container spacing={3} sx={{ mb: 3 }}>
+              <Grid item xs={12} md={3}>
+                <Card elevation={2}>
                   <CardContent>
-                    <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                      <Person sx={{ mr: 1 }} />
-                      Kontaktinformationen
+                    <Typography color="textSecondary" gutterBottom>
+                      Offene Termine
                     </Typography>
-                    <List>
-                      <ListItem>
-                        <ListItemIcon>
-                          <Phone />
-                        </ListItemIcon>
-                        <ListItemText
-                          primary="Telefon"
-                          secondary={patient.phone_number}
-                        />
-                      </ListItem>
-                      <ListItem>
-                        <ListItemIcon>
-                          <Email />
-                        </ListItemIcon>
-                        <ListItemText
-                          primary="E-Mail"
-                          secondary={patient.email}
-                        />
-                      </ListItem>
-                      <ListItem>
-                        <ListItemIcon>
-                          <Home />
-                        </ListItemIcon>
-                        <ListItemText
-                          primary="Adresse"
-                          secondary={`${patient.street_address}, ${patient.postal_code} ${patient.city}`}
-                        />
-                      </ListItem>
-                    </List>
+                    <Typography variant="h4">
+                      {appointments.filter(a => a.status === 'planned').length}
+                    </Typography>
                   </CardContent>
                 </Card>
               </Grid>
-
-              {/* Medizinische Informationen */}
-              <Grid item xs={12} md={6}>
-                <Card elevation={3}>
+              <Grid item xs={12} md={3}>
+                <Card elevation={2}>
                   <CardContent>
-                    <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                      <MedicalServices sx={{ mr: 1 }} />
-                      Medizinische Informationen
+                    <Typography color="textSecondary" gutterBottom>
+                      Aktive Verordnungen
                     </Typography>
-                    <Box sx={{ mt: 2 }}>
-                      <Typography variant="subtitle2" color="text.secondary">
-                        Allergien
-                      </Typography>
-                      <Typography paragraph>
-                        {patient.allergies || 'Keine bekannt'}
-                      </Typography>
-                      
-                      <Typography variant="subtitle2" color="text.secondary">
-                        Medizinische Vorgeschichte
-                      </Typography>
-                      <Typography>
-                        {patient.medical_history || 'Keine Einträge'}
-                      </Typography>
-                    </Box>
+                    <Typography variant="h4">
+                      {prescriptions.filter(p => p.status === 'active').length}
+                    </Typography>
                   </CardContent>
                 </Card>
               </Grid>
-
-              {/* Aktuelle Termine */}
-              <Grid item xs={12}>
-                <Card elevation={3}>
+              <Grid item xs={12} md={3}>
+                <Card elevation={2}>
                   <CardContent>
-                    <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                      <Event sx={{ mr: 1 }} />
-                      Nächste Termine
+                    <Typography color="textSecondary" gutterBottom>
+                      Letzter Besuch
                     </Typography>
-                    <List>
-                      {appointments.slice(0, 3).map((appointment) => (
-                        <ListItem
-                          key={appointment.id}
-                          component="div"
-                          onClick={() => handleAppointmentClick(appointment.id)}
-                          sx={{
-                            cursor: 'pointer',
-                            borderLeft: 6,
-                            borderColor: 
-                              appointment.status === 'confirmed' ? 'success.main' :
-                              appointment.status === 'planned' ? 'info.main' : 'grey.300',
-                            mb: 1,
-                            bgcolor: 'background.paper',
-                            borderRadius: 1
-                          }}
-                        >
-                          <ListItemIcon>
-                            <AccessTime />
-                          </ListItemIcon>
-                          <ListItemText
-                            primary={new Date(appointment.appointment_date).toLocaleString('de-DE')}
-                            secondary={appointment.treatment?.treatment_name}
-                          />
-                          <Chip
-                            label={appointment.status}
-                            size="small"
-                            color={
-                              appointment.status === 'confirmed' ? 'success' :
-                              appointment.status === 'planned' ? 'primary' : 'default'
-                            }
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
+                    <Typography variant="h4">
+                      {appointments.length > 0 
+                        ? new Date(appointments[0].appointment_date).toLocaleDateString('de-DE')
+                        : 'Keine'}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Card elevation={2}>
+                  <CardContent>
+                    <Typography color="textSecondary" gutterBottom>
+                      Status
+                    </Typography>
+                    <Typography variant="h4">
+                      Aktiv
+                    </Typography>
                   </CardContent>
                 </Card>
               </Grid>
             </Grid>
-          </TabPanel>
 
-          {/* Termine Tab */}
-          <TabPanel value={tabValue} index={1}>
-            <Card elevation={3}>
-              <CardContent>
-                <List>
-                  {appointments.map((appointment) => (
-                    <ListItem
-                      key={appointment.id}
-                      component="div"
-                      onClick={() => handleAppointmentClick(appointment.id)}
-                      sx={{
-                        cursor: 'pointer',
-                        borderLeft: 6,
-                        borderColor: 
-                          appointment.status === 'confirmed' ? 'success.main' :
-                          appointment.status === 'planned' ? 'info.main' : 'grey.300',
-                        mb: 2,
-                        bgcolor: 'background.paper',
-                        borderRadius: 1
-                      }}
-                    >
-                      <ListItemText
-                        primary={
-                          <Typography variant="subtitle1">
-                            {new Date(appointment.appointment_date).toLocaleString('de-DE')}
-                          </Typography>
-                        }
-                        secondary={
-                          <>
-                            <Typography variant="body2" color="text.secondary">
-                              Behandlung: {appointment.treatment?.treatment_name}
-                            </Typography>
-                            {appointment.notes && (
-                              <Typography variant="body2" color="text.secondary">
-                                Notizen: {appointment.notes}
-                              </Typography>
-                            )}
-                          </>
-                        }
-                      />
-                      <Chip
-                        label={appointment.status}
-                        size="small"
-                        color={
-                          appointment.status === 'confirmed' ? 'success' :
-                          appointment.status === 'planned' ? 'primary' : 'default'
-                        }
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              </CardContent>
-            </Card>
-          </TabPanel>
+            {/* Main Content Tabs */}
+            <Paper elevation={3} sx={{ borderRadius: 2 }}>
+              <Tabs 
+                value={tabValue} 
+                onChange={handleTabChange}
+                sx={{ borderBottom: 1, borderColor: 'divider' }}
+              >
+                <Tab label="Übersicht" />
+                <Tab label="Termine" />
+                <Tab label="Verordnungen" />
+                <Tab label="Dokumente" />
+              </Tabs>
 
-          {/* Verordnungen Tab */}
-          <TabPanel value={tabValue} index={2}>
-            <Card elevation={3}>
-              <CardContent>
-                <List>
-                  {prescriptions.map((prescription) => (
-                    <ListItem
-                      key={prescription.id}
-                      sx={{
-                        mb: 2,
-                        bgcolor: 'background.paper',
-                        borderRadius: 1,
-                        boxShadow: 1
-                      }}
-                    >
-                      <ListItemText
-                        primary={
-                          <Typography variant="subtitle1">
-                            {prescription.treatment_1}
+              {/* Tab Content */}
+              <TabPanel value={tabValue} index={0}>
+                <Grid container spacing={3}>
+                  {/* Left Column */}
+                  <Grid item xs={12} md={6}>
+                    <Card elevation={2} sx={{ mb: 3 }}>
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+                          <Person sx={{ mr: 1 }} />
+                          Kontaktinformationen
+                        </Typography>
+                        <List>
+                          <ListItem>
+                            <ListItemIcon>
+                              <Phone />
+                            </ListItemIcon>
+                            <ListItemText
+                              primary="Telefon"
+                              secondary={patient.phone_number}
+                            />
+                          </ListItem>
+                          <ListItem>
+                            <ListItemIcon>
+                              <Email />
+                            </ListItemIcon>
+                            <ListItemText
+                              primary="E-Mail"
+                              secondary={patient.email}
+                            />
+                          </ListItem>
+                          <ListItem>
+                            <ListItemIcon>
+                              <Home />
+                            </ListItemIcon>
+                            <ListItemText
+                              primary="Adresse"
+                              secondary={`${patient.street_address}, ${patient.postal_code} ${patient.city}`}
+                            />
+                          </ListItem>
+                        </List>
+                      </CardContent>
+                    </Card>
+
+                    <Card elevation={2}>
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+                          <MedicalServices sx={{ mr: 1 }} />
+                          Medizinische Informationen
+                        </Typography>
+                        <Box sx={{ mt: 2 }}>
+                          <Typography variant="subtitle2" color="text.secondary">
+                            Allergien
                           </Typography>
-                        }
-                        secondary={
-                          <>
-                            <Typography variant="body2" color="text.secondary">
-                              Verordnet am: {new Date(prescription.created_at).toLocaleDateString('de-DE')}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              Status: {prescription.status}
-                            </Typography>
-                            {prescription.notes && (
-                              <Typography variant="body2" color="text.secondary">
-                                Notizen: {prescription.notes}
-                              </Typography>
-                            )}
-                          </>
-                        }
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              </CardContent>
-            </Card>
-          </TabPanel>
-        </>
-      ) : (
-        <Alert severity="info">Kein Patient gefunden</Alert>
-      )}
-    </Container>
+                          <Typography paragraph>
+                            {patient.allergies || 'Keine bekannt'}
+                          </Typography>
+                          
+                          <Typography variant="subtitle2" color="text.secondary">
+                            Medizinische Vorgeschichte
+                          </Typography>
+                          <Typography>
+                            {patient.medical_history || 'Keine Einträge'}
+                          </Typography>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  {/* Right Column */}
+                  <Grid item xs={12} md={6}>
+                    <Card elevation={2} sx={{ mb: 3 }}>
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+                          <Event sx={{ mr: 1 }} />
+                          Nächste Termine
+                        </Typography>
+                        <List>
+                          {appointments
+                            .filter((appointment) => new Date(appointment.appointment_date) > new Date())
+                            .slice(0, 3)
+                            .map((appointment) => (
+                            <ListItem
+                              key={appointment.id}
+                              component="div"
+                              onClick={() => handleAppointmentClick(appointment.id)}
+                              sx={{
+                                cursor: 'pointer',
+                                borderLeft: 6,
+                                borderColor: 
+                                  appointment.status === 'confirmed' ? 'success.main' :
+                                  appointment.status === 'planned' ? 'info.main' : 'grey.300',
+                                mb: 1,
+                                bgcolor: 'background.paper',
+                                borderRadius: 1
+                              }}
+                            >
+                              <ListItemIcon>
+                                <AccessTime />
+                              </ListItemIcon>
+                              <ListItemText
+                                primary={new Date(appointment.appointment_date).toLocaleString('de-DE')}
+                                secondary={appointment.treatment?.treatment_name}
+                              />
+                              <Chip
+                                label={appointment.status}
+                                size="small"
+                                color={
+                                  appointment.status === 'confirmed' ? 'success' :
+                                  appointment.status === 'planned' ? 'primary' : 'default'
+                                }
+                              />
+                            </ListItem>
+                          ))}
+                        </List>
+                      </CardContent>
+                    </Card>
+
+                    <Card elevation={2}>
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+                          <Timeline sx={{ mr: 1 }} />
+                          Aktuelle Verordnungen
+                        </Typography>
+                        <List>
+                          {prescriptions.slice(0, 3).map((prescription) => (
+                            <ListItem
+                              key={prescription.id}
+                              sx={{
+                                mb: 1,
+                                bgcolor: 'background.paper',
+                                borderRadius: 1
+                              }}
+                            >
+                              <ListItemText
+                                primary={prescription.treatment_1}
+                                secondary={`Verordnet am: ${new Date(prescription.created_at).toLocaleDateString('de-DE')}`}
+                              />
+                              <Chip
+                                label={prescription.status}
+                                size="small"
+                                color={prescription.status === 'active' ? 'success' : 'default'}
+                              />
+                            </ListItem>
+                          ))}
+                        </List>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                </Grid>
+              </TabPanel>
+
+              {/* Other Tab Panels remain the same */}
+              <TabPanel value={tabValue} index={1}>
+                <Box sx={{ overflowX: 'auto' }}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Datum</TableCell>
+                        <TableCell>Behandlung</TableCell>
+                        <TableCell>Status</TableCell>
+                        <TableCell>Aktionen</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {appointments.map((appointment) => (
+                        <TableRow key={appointment.id}>
+                          <TableCell>{new Date(appointment.appointment_date).toLocaleString('de-DE')}</TableCell>
+                          <TableCell>{appointment.treatment?.treatment_name}</TableCell>
+                          <TableCell>{appointment.status}</TableCell>
+                          <TableCell>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              onClick={() => handleAppointmentClick(appointment.id)}
+                            >
+                              Details
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Box>
+              </TabPanel>
+
+              <TabPanel value={tabValue} index={2}>
+                <Box sx={{ overflowX: 'auto' }}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Behandlung</TableCell>
+                        <TableCell>Verordnet am</TableCell>
+                        <TableCell>Status</TableCell>
+                        <TableCell>Aktionen</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {prescriptions.map((prescription) => (
+                        <TableRow key={prescription.id}>
+                          <TableCell>{prescription.treatment_1}</TableCell>
+                          <TableCell>{new Date(prescription.created_at).toLocaleDateString('de-DE')}</TableCell>
+                          <TableCell>{prescription.status}</TableCell>
+                          <TableCell>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              onClick={() => handlePrescriptionClick(prescription.id)}
+                            >
+                              Details
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Box>
+              </TabPanel>
+            </Paper>
+          </Box>
+        ) : (
+          <Alert severity="info" sx={{ mt: 2 }}>Kein Patient gefunden</Alert>
+        )}
+      </Box>
+    </Box>
   );
 }
 

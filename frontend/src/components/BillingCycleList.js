@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Box, 
   Paper, 
@@ -16,11 +16,7 @@ function BillingCycleList() {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchBillingCycles();
-  }, []);
-
-  const fetchBillingCycles = async () => {
+  const fetchBillingCycles = useCallback(async () => {
     try {
       const response = await api.get('/billing-cycles/');
       const formattedCycles = response.data.map(cycle => ({
@@ -36,7 +32,11 @@ function BillingCycleList() {
       console.error('Fehler beim Laden der Abrechnungszyklen:', error);
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchBillingCycles();
+  }, [fetchBillingCycles]);
 
   const getStatusLabel = (status) => {
     const labels = {

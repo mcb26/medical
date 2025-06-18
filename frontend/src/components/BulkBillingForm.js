@@ -9,7 +9,6 @@ import {
   CircularProgress
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
 import api from '../api/axios';
 
 function BulkBillingForm() {
@@ -29,7 +28,7 @@ function BulkBillingForm() {
     setSuccess('');
 
     try {
-      const response = await api.post('/billing-cycles/bulk/', formData);
+      await api.post('/billing-cycles/bulk/', formData);
       setSuccess('Massenabrechnung erfolgreich gestartet!');
       setTimeout(() => {
         navigate('/billing-cycles');

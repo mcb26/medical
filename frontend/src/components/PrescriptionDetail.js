@@ -18,7 +18,8 @@ import {
   TableCell,
   TableRow,
   TableHead,
-  Chip
+  Chip,
+  CardContent
 } from '@mui/material';
 import {
   Warning as WarningIcon,
@@ -113,6 +114,10 @@ function PrescriptionDetail() {
     setShowSeriesPreview(true);
   };
 
+  const handleCreateSeriesNew = () => {
+    navigate(`/appointments/series/new?prescriptionId=${id}`);
+  };
+
   const handleSeriesConfirm = async (config) => {
     try {
       await api.post(`/appointments/series/${prescription.id}/`, config);
@@ -189,165 +194,174 @@ function PrescriptionDetail() {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate('/prescriptions')}
-        >
-          Zurück zur Liste
-        </Button>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<EditIcon />}
-            onClick={handleEdit}
-          >
-            Bearbeiten
-          </Button>
-          <Button
-            variant="contained"
-            color="secondary"
-            startIcon={<EventIcon />}
-            onClick={handleCreateSeries}
-          >
-            Terminserie erstellen
-          </Button>
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <Box component="main" sx={{ flexGrow: 1, p: 0 }}>
+        <Box sx={{ mx: 0 }}>
+          {/* Header */}
+          <Paper elevation={3} sx={{ p: 3, mb: 3, borderRadius: 2, backgroundColor: '#f5f5f5' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Button
+                startIcon={<ArrowBackIcon />}
+                onClick={() => navigate('/prescriptions')}
+              >
+                Zurück zur Liste
+              </Button>
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<EditIcon />}
+                  onClick={handleEdit}
+                >
+                  Bearbeiten
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  onClick={handleCreateSeriesNew}
+                >
+                  Neue Terminserie 
+                </Button>
+              </Box>
+            </Box>
+          </Paper>
+
+          {/* Content */}
+          <Paper elevation={3} sx={{ borderRadius: 2 }}>
+            <CardContent>
+              <Grid container spacing={3}>
+                <Grid item xs={12}>
+                  <Typography variant="h5" gutterBottom>
+                    Verordnungsdetails
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Patient
+                  </Typography>
+                  <Typography variant="body1">
+                    {prescription.patient_name}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Verordnungsdatum
+                  </Typography>
+                  <Typography variant="body1">
+                    {format(new Date(prescription.prescription_date), 'dd.MM.yyyy', { locale: de })}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Arzt
+                  </Typography>
+                  <Typography variant="body1">
+                    {prescription.doctor_name}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Status
+                  </Typography>
+                  <Chip
+                    label={STATUS_CONFIG[prescription.status]?.label || prescription.status}
+                    color={STATUS_CONFIG[prescription.status]?.color || 'default'}
+                  />
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Behandlungen
+                  </Typography>
+                  <Box sx={{ mt: 1 }}>
+                    {prescription.treatment_1_name && (
+                      <Chip label={prescription.treatment_1_name} sx={{ mr: 1, mb: 1 }} />
+                    )}
+                    {prescription.treatment_2_name && (
+                      <Chip label={prescription.treatment_2_name} sx={{ mr: 1, mb: 1 }} />
+                    )}
+                    {prescription.treatment_3_name && (
+                      <Chip label={prescription.treatment_3_name} sx={{ mr: 1, mb: 1 }} />
+                    )}
+                  </Box>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Diagnose
+                  </Typography>
+                  <Typography variant="body1">
+                    {prescription.diagnosis_code_display}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Diagnosetext
+                  </Typography>
+                  <Typography variant="body1">
+                    {prescription.diagnosis_text}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Anzahl Behandlungen
+                  </Typography>
+                  <Typography variant="body1">
+                    {prescription.number_of_sessions}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Durchgeführte Behandlungen
+                  </Typography>
+                  <Typography variant="body1">
+                    {prescription.sessions_completed}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Frequenz
+                  </Typography>
+                  <Typography variant="body1">
+                    {prescription.therapy_frequency_type}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Therapieziele
+                  </Typography>
+                  <Typography variant="body1">
+                    {prescription.therapy_goals}
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Box sx={{ mt: 2 }}>
+                    {prescription.is_urgent && (
+                      <Chip label="Dringend" color="error" sx={{ mr: 1, mb: 1 }} />
+                    )}
+                    {prescription.requires_home_visit && (
+                      <Chip label="Hausbesuch erforderlich" color="warning" sx={{ mr: 1, mb: 1 }} />
+                    )}
+                    {prescription.therapy_report_required && (
+                      <Chip label="Therapiebericht erforderlich" color="info" sx={{ mr: 1, mb: 1 }} />
+                    )}
+                  </Box>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Paper>
         </Box>
       </Box>
-
-      <Paper sx={{ p: 3 }}>
-        <Grid container spacing={3}>
-          <Grid item xs={12}>
-            <Typography variant="h5" gutterBottom>
-              Verordnungsdetails
-            </Typography>
-          </Grid>
-
-          <Grid item xs={12} md={6}>
-            <Typography variant="subtitle2" color="text.secondary">
-              Patient
-            </Typography>
-            <Typography variant="body1">
-              {prescription.patient_name}
-            </Typography>
-          </Grid>
-
-          <Grid item xs={12} md={6}>
-            <Typography variant="subtitle2" color="text.secondary">
-              Verordnungsdatum
-            </Typography>
-            <Typography variant="body1">
-              {format(new Date(prescription.prescription_date), 'dd.MM.yyyy', { locale: de })}
-            </Typography>
-          </Grid>
-
-          <Grid item xs={12} md={6}>
-            <Typography variant="subtitle2" color="text.secondary">
-              Arzt
-            </Typography>
-            <Typography variant="body1">
-              {prescription.doctor_name}
-            </Typography>
-          </Grid>
-
-          <Grid item xs={12} md={6}>
-            <Typography variant="subtitle2" color="text.secondary">
-              Status
-            </Typography>
-            <Chip
-              label={STATUS_CONFIG[prescription.status]?.label || prescription.status}
-              color={STATUS_CONFIG[prescription.status]?.color || 'default'}
-            />
-          </Grid>
-
-          <Grid item xs={12}>
-            <Typography variant="subtitle2" color="text.secondary">
-              Behandlungen
-            </Typography>
-            <Box sx={{ mt: 1 }}>
-              {prescription.treatment_1_name && (
-                <Chip label={prescription.treatment_1_name} sx={{ mr: 1, mb: 1 }} />
-              )}
-              {prescription.treatment_2_name && (
-                <Chip label={prescription.treatment_2_name} sx={{ mr: 1, mb: 1 }} />
-              )}
-              {prescription.treatment_3_name && (
-                <Chip label={prescription.treatment_3_name} sx={{ mr: 1, mb: 1 }} />
-              )}
-            </Box>
-          </Grid>
-
-          <Grid item xs={12} md={6}>
-            <Typography variant="subtitle2" color="text.secondary">
-              Diagnose
-            </Typography>
-            <Typography variant="body1">
-              {prescription.diagnosis_code_display}
-            </Typography>
-          </Grid>
-
-          <Grid item xs={12} md={6}>
-            <Typography variant="subtitle2" color="text.secondary">
-              Diagnosetext
-            </Typography>
-            <Typography variant="body1">
-              {prescription.diagnosis_text}
-            </Typography>
-          </Grid>
-
-          <Grid item xs={12} md={4}>
-            <Typography variant="subtitle2" color="text.secondary">
-              Anzahl Behandlungen
-            </Typography>
-            <Typography variant="body1">
-              {prescription.number_of_sessions}
-            </Typography>
-          </Grid>
-
-          <Grid item xs={12} md={4}>
-            <Typography variant="subtitle2" color="text.secondary">
-              Durchgeführte Behandlungen
-            </Typography>
-            <Typography variant="body1">
-              {prescription.sessions_completed}
-            </Typography>
-          </Grid>
-
-          <Grid item xs={12} md={4}>
-            <Typography variant="subtitle2" color="text.secondary">
-              Frequenz
-            </Typography>
-            <Typography variant="body1">
-              {prescription.therapy_frequency_type}
-            </Typography>
-          </Grid>
-
-          <Grid item xs={12}>
-            <Typography variant="subtitle2" color="text.secondary">
-              Therapieziele
-            </Typography>
-            <Typography variant="body1">
-              {prescription.therapy_goals}
-            </Typography>
-          </Grid>
-
-          <Grid item xs={12}>
-            <Box sx={{ mt: 2 }}>
-              {prescription.is_urgent && (
-                <Chip label="Dringend" color="error" sx={{ mr: 1, mb: 1 }} />
-              )}
-              {prescription.requires_home_visit && (
-                <Chip label="Hausbesuch erforderlich" color="warning" sx={{ mr: 1, mb: 1 }} />
-              )}
-              {prescription.therapy_report_required && (
-                <Chip label="Therapiebericht erforderlich" color="info" sx={{ mr: 1, mb: 1 }} />
-              )}
-            </Box>
-          </Grid>
-        </Grid>
-      </Paper>
     </Box>
   );
 }

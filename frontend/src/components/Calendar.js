@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PractitionerCalendar from './PractitionerCalendar';
 import RoomsCalendar from './RoomsCalendar';
-import { ToggleButton, ToggleButtonGroup, Box, Button, Typography, IconButton, Stack, Select, MenuItem, FormControl, InputLabel, Chip, OutlinedInput, Checkbox, ListItemText, ListSubheader, Divider } from '@mui/material';
+import { ToggleButton, ToggleButtonGroup, Box, Button, Typography, IconButton, Stack, Select, MenuItem, FormControl, InputLabel, OutlinedInput, Checkbox, ListItemText, ListSubheader, Divider } from '@mui/material';
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import deLocale from 'date-fns/locale/de';
@@ -13,13 +13,13 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import ViewWeekIcon from '@mui/icons-material/ViewWeek';
 import TableRowsIcon from '@mui/icons-material/TableRows';
 import AddIcon from '@mui/icons-material/Add';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfWeek, endOfWeek } from 'date-fns';
 import api from '../api/axios';
 
 const allowedViews = ['resourceTimeGridDay', 'resourceTimeGridWeek', 'dayGridMonth'];
 const getInitialView = () => {
     const stored = localStorage.getItem('calendar_view');
-    return allowedViews.includes(stored) ? stored : 'resourceTimeGridWeek';
+    return allowedViews.includes(stored) ? stored : 'resourceTimeGridDay';
 };
 
 function getCurrentLabel(view, date) {
@@ -42,14 +42,22 @@ function getCurrentLabel(view, date) {
 const Calendar = () => {
     const navigate = useNavigate();
     const [view, setView] = useState(getInitialView);
-    const [currentDate, setCurrentDate] = useState(() => localStorage.getItem('calendar_date') || new Date().toISOString().slice(0, 10));
-    const [mode, setMode] = useState('rooms');
+    const [currentDate, setCurrentDate] = useState(() => {
+        const stored = localStorage.getItem('calendar_date');
+        return stored ? new Date(stored) : new Date();
+    });
+    const [mode, setMode] = useState(() => localStorage.getItem('calendar_mode') || 'rooms');
     const [openDatePicker, setOpenDatePicker] = useState(false);
     const [selectedResources, setSelectedResources] = useState(() => {
         const stored = localStorage.getItem(`selected_${mode}`);
         return stored ? JSON.parse(stored) : [];
     });
     const [resources, setResources] = useState([]);
+
+    // Speichere Modus im localStorage wenn er sich ändert
+    useEffect(() => {
+        localStorage.setItem('calendar_mode', mode);
+    }, [mode]);
 
     // Lade Ressourcen (Räume oder Behandler) beim Start und wenn sich der Modus ändert
     useEffect(() => {
@@ -65,7 +73,14 @@ const Calendar = () => {
                     const parsedStored = JSON.parse(stored);
                     // Stelle sicher, dass nur gültige IDs ausgewählt sind
                     const validIds = response.data.map(r => r.id);
-                    setSelectedResources(parsedStored.filter(id => validIds.includes(id)));
+                    const filteredIds = parsedStored.filter(id => validIds.includes(id));
+                    
+                    // Wenn keine gültigen IDs gefunden wurden, wähle alle aus
+                    if (filteredIds.length === 0) {
+                        setSelectedResources(response.data.map(r => r.id));
+                    } else {
+                        setSelectedResources(filteredIds);
+                    }
                 } else {
                     // Wenn keine Auswahl gespeichert ist, wähle alle aus
                     setSelectedResources(response.data.map(r => r.id));
@@ -99,13 +114,13 @@ const Calendar = () => {
             localStorage.setItem('calendar_view', newView);
         }
     };
+
     const handleDateChange = (newDate) => {
         if (!(newDate instanceof Date) || isNaN(newDate)) {
             return;
         }
-        const iso = newDate.toISOString().slice(0, 10);
-        setCurrentDate(iso);
-        localStorage.setItem('calendar_date', iso);
+        setCurrentDate(newDate);
+        localStorage.setItem('calendar_date', newDate.toISOString());
     };
 
     // Navigation
@@ -305,6 +320,9 @@ const Calendar = () => {
                     onDateChange={handleDateChange}
                     selectedResources={selectedResources}
                     resources={resources}
+                    onPrev={handlePrev}
+                    onNext={handleNext}
+                    onToday={handleToday}
                 />
             ) : (
                 <PractitionerCalendar
@@ -314,6 +332,9 @@ const Calendar = () => {
                     onDateChange={handleDateChange}
                     selectedResources={selectedResources}
                     resources={resources}
+                    onPrev={handlePrev}
+                    onNext={handleNext}
+                    onToday={handleToday}
                 />
             )}
         </Box>

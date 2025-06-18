@@ -37,18 +37,53 @@ function Profile() {
         return;
       }
 
-      const response = await axios.get('http://localhost:8000/api/users/me/', {
+      // API-URL aus der Umgebungsvariable oder Fallback
+      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+      
+      const response = await axios.get(`${API_URL}/api/users/me/`, {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         }
       });
 
-      setProfile(response.data);
+      if (response.data) {
+        setProfile(response.data);
+        setError(null);
+      } else {
+        setError('Keine Profildaten erhalten');
+      }
     } catch (error) {
       console.error('Error fetching profile:', error);
-      setError('Fehler beim Laden des Profils');
-      if (error.response?.status === 401) {
-        navigate('/login');
+      
+      // Detaillierte Fehlerbehandlung
+      if (error.response) {
+        // Server hat mit einem Status-Code geantwortet
+        switch (error.response.status) {
+          case 401:
+            setError('Nicht autorisiert. Bitte melden Sie sich erneut an.');
+            localStorage.removeItem('token');
+            navigate('/login');
+            break;
+          case 403:
+            setError('Zugriff verweigert');
+            break;
+          case 404:
+            setError('Profil nicht gefunden');
+            break;
+          case 500:
+            setError('Serverfehler. Bitte versuchen Sie es später erneut.');
+            break;
+          default:
+            setError(`Fehler beim Laden des Profils: ${error.response.data?.detail || error.message}`);
+        }
+      } else if (error.request) {
+        // Request wurde gesendet, aber keine Antwort erhalten
+        setError('Keine Antwort vom Server. Bitte überprüfen Sie Ihre Internetverbindung.');
+      } else {
+        // Fehler beim Erstellen des Requests
+        setError(`Fehler: ${error.message}`);
       }
     } finally {
       setLoading(false);
@@ -65,9 +100,29 @@ function Profile() {
 
   if (error) {
     return (
-      <Alert severity="error" sx={{ m: 2 }}>
-        {error}
-      </Alert>
+      <Box sx={{ p: 3, maxWidth: 800, margin: '0 auto' }}>
+        <Alert 
+          severity="error" 
+          sx={{ mb: 2 }}
+          action={
+            <Button color="inherit" size="small" onClick={fetchProfile}>
+              Erneut versuchen
+            </Button>
+          }
+        >
+          {error}
+        </Alert>
+      </Box>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <Box sx={{ p: 3, maxWidth: 800, margin: '0 auto' }}>
+        <Alert severity="warning">
+          Keine Profildaten verfügbar
+        </Alert>
+      </Box>
     );
   }
 

@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
   Paper,
   Typography,
-  Grid,
   Button,
   CircularProgress,
   Alert,
@@ -34,11 +33,7 @@ function InsuranceGroupDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    fetchGroupData();
-  }, [id]);
-
-  const fetchGroupData = async () => {
+  const fetchGroupData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -57,7 +52,11 @@ function InsuranceGroupDetail() {
         navigate('/login');
       }
     }
-  };
+  }, [id, navigate]);
+
+  useEffect(() => {
+    fetchGroupData();
+  }, [fetchGroupData]);
 
   const handleDelete = async () => {
     if (window.confirm('Sind Sie sicher, dass Sie diese Gruppe löschen möchten? Alle Zuordnungen zu Krankenkassen werden aufgehoben.')) {

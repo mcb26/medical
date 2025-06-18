@@ -142,208 +142,224 @@ function AppointmentDetail() {
   };
 
   return (
-    <Box p={3}>
-      <Typography variant="h4" gutterBottom>
-        Termin-Details
-      </Typography>
-      {appointment.series_identifier && (
-        <Box mb={2}>
-          <Button
-            variant="outlined"
-            color="primary"
-            component={Link}
-            to={`/appointments/series/${appointment.series_identifier}`}
-          >
-            Zur Terminserie
-          </Button>
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <Box component="main" sx={{ flexGrow: 1, p: 0 }}>
+        <Box sx={{ mx: 0 }}>
+          {/* Header */}
+          <Paper elevation={3} sx={{ p: 3, mb: 3, borderRadius: 2, backgroundColor: '#f5f5f5' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="h4">Termin-Details</Typography>
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                {appointment.series_identifier && (
+                  <Button
+                    variant="outlined"
+                    color="primary"
+                    component={Link}
+                    to={`/appointments/series/${appointment.series_identifier}`}
+                  >
+                    Zur Terminserie
+                  </Button>
+                )}
+                {!editMode ? (
+                  <>
+                    <Button
+                      variant="contained"
+                      startIcon={<Edit />}
+                      onClick={() => setEditMode(true)}
+                    >
+                      Bearbeiten
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      startIcon={<Delete />}
+                      onClick={handleDelete}
+                    >
+                      Löschen
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      variant="contained"
+                      color="success"
+                      startIcon={<Save />}
+                      onClick={handleUpdate}
+                    >
+                      Speichern
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      startIcon={<Cancel />}
+                      onClick={() => setEditMode(false)}
+                    >
+                      Abbrechen
+                    </Button>
+                  </>
+                )}
+              </Box>
+            </Box>
+          </Paper>
+
+          {/* Content */}
+          <Paper elevation={3} sx={{ borderRadius: 2 }}>
+            <CardContent>
+              {!editMode ? (
+                <Grid container spacing={3}>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" color="text.secondary"><Person sx={{ mr: 1 }} fontSize="small"/>Patient</Typography>
+                    <Typography variant="body1" sx={{ mb: 1 }}>{getPatientName()}</Typography>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" color="text.secondary"><LocalHospital sx={{ mr: 1 }} fontSize="small"/>Behandler</Typography>
+                    <Typography variant="body1" sx={{ mb: 1 }}>{getPractitionerName()}</Typography>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" color="text.secondary"><Room sx={{ mr: 1 }} fontSize="small"/>Raum</Typography>
+                    <Typography variant="body1" sx={{ mb: 1 }}>{getRoomName() || '-'}</Typography>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" color="text.secondary"><Event sx={{ mr: 1 }} fontSize="small"/>Behandlung</Typography>
+                    <Typography variant="body1" sx={{ mb: 1 }}>{getTreatmentName()}</Typography>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" color="text.secondary"><AccessTime sx={{ mr: 1 }} fontSize="small"/>Datum & Uhrzeit</Typography>
+                    <Typography variant="body1" sx={{ mb: 1 }}>{formatDateTime(appointment.appointment_date)}</Typography>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" color="text.secondary">Dauer</Typography>
+                    <Typography variant="body1" sx={{ mb: 1 }}>{appointment.duration_minutes} Minuten</Typography>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="subtitle2" color="text.secondary">Status</Typography>
+                    <Chip label={appointment.status} color={appointment.status === 'planned' ? 'info' : appointment.status === 'confirmed' ? 'success' : 'default'} />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" color="text.secondary">Notizen</Typography>
+                    <Typography variant="body1">{appointment.notes || '–'}</Typography>
+                  </Grid>
+                </Grid>
+              ) : (
+                <Grid container spacing={3}>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      select
+                      label="Patient"
+                      name="patient"
+                      value={formState.patient || ''}
+                      onChange={handleChange}
+                      fullWidth
+                    >
+                      {patients.map((patient) => (
+                        <MenuItem key={patient.id} value={patient.id}>
+                          {patient.first_name} {patient.last_name}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      select
+                      label="Behandler"
+                      name="practitioner"
+                      value={formState.practitioner || ''}
+                      onChange={handleChange}
+                      fullWidth
+                    >
+                      {practitioners.map((practitioner) => (
+                        <MenuItem key={practitioner.id} value={practitioner.id}>
+                          {practitioner.first_name} {practitioner.last_name}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      select
+                      label="Raum"
+                      name="room"
+                      value={formState.room || ''}
+                      onChange={handleChange}
+                      fullWidth
+                    >
+                      {rooms.map((room) => (
+                        <MenuItem key={room.id} value={room.id}>
+                          {room.name}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      select
+                      label="Behandlung"
+                      name="treatment"
+                      value={formState.treatment || ''}
+                      onChange={handleChange}
+                      fullWidth
+                    >
+                      {treatments.map((treatment) => (
+                        <MenuItem key={treatment.id} value={treatment.id}>
+                          {treatment.treatment_name}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      label="Datum & Uhrzeit"
+                      type="datetime-local"
+                      name="appointment_date"
+                      value={formState.appointment_date ? formState.appointment_date.slice(0, 16) : ''}
+                      onChange={handleChange}
+                      fullWidth
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      label="Dauer (Minuten)"
+                      name="duration_minutes"
+                      value={formState.duration_minutes || ''}
+                      onChange={handleChange}
+                      fullWidth
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      select
+                      label="Status"
+                      name="status"
+                      value={formState.status || ''}
+                      onChange={handleChange}
+                      fullWidth
+                    >
+                      <MenuItem value="planned">Geplant</MenuItem>
+                      <MenuItem value="confirmed">Bestätigt</MenuItem>
+                      <MenuItem value="completed">Abgeschlossen</MenuItem>
+                      <MenuItem value="ready_to_bill">Abrechnungsbereit</MenuItem>
+                      <MenuItem value="billed">Abgerechnet</MenuItem>
+                      <MenuItem value="cancelled">Storniert</MenuItem>
+                      <MenuItem value="no_show">Nicht erschienen</MenuItem>
+                    </TextField>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      label="Notizen"
+                      name="notes"
+                      value={formState.notes || ''}
+                      onChange={handleChange}
+                      fullWidth
+                      multiline
+                      rows={3}
+                    />
+                  </Grid>
+                </Grid>
+              )}
+            </CardContent>
+          </Paper>
         </Box>
-      )}
-      <Card elevation={3} sx={{ maxWidth: 600, margin: '0 auto', p: 2 }}>
-        <CardContent>
-          {!editMode ? (
-            <>
-              <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" color="text.secondary"><Person sx={{ mr: 1 }} fontSize="small"/>Patient</Typography>
-                  <Typography variant="body1" sx={{ mb: 1 }}>{getPatientName()}</Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" color="text.secondary"><LocalHospital sx={{ mr: 1 }} fontSize="small"/>Behandler</Typography>
-                  <Typography variant="body1" sx={{ mb: 1 }}>{getPractitionerName()}</Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" color="text.secondary"><Room sx={{ mr: 1 }} fontSize="small"/>Raum</Typography>
-                  <Typography variant="body1" sx={{ mb: 1 }}>{getRoomName() || '-'}</Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" color="text.secondary"><Event sx={{ mr: 1 }} fontSize="small"/>Behandlung</Typography>
-                  <Typography variant="body1" sx={{ mb: 1 }}>{getTreatmentName()}</Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" color="text.secondary"><AccessTime sx={{ mr: 1 }} fontSize="small"/>Datum & Uhrzeit</Typography>
-                  <Typography variant="body1" sx={{ mb: 1 }}>{formatDateTime(appointment.appointment_date)}</Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" color="text.secondary">Dauer</Typography>
-                  <Typography variant="body1" sx={{ mb: 1 }}>{appointment.duration_minutes} Minuten</Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" color="text.secondary">Status</Typography>
-                  <Chip label={appointment.status} color={appointment.status === 'planned' ? 'info' : appointment.status === 'confirmed' ? 'success' : 'default'} />
-                </Grid>
-                <Grid item xs={12}>
-                  <Typography variant="subtitle2" color="text.secondary">Notizen</Typography>
-                  <Typography variant="body1">{appointment.notes || '–'}</Typography>
-                </Grid>
-              </Grid>
-              <Divider sx={{ my: 2 }} />
-              <Box display="flex" justifyContent="flex-end" gap={2}>
-                <Button variant="contained" startIcon={<Edit />} onClick={() => setEditMode(true)}>
-                  Bearbeiten
-                </Button>
-                <Button variant="outlined" color="error" startIcon={<Delete />} onClick={handleDelete}>
-                  Löschen
-                </Button>
-              </Box>
-            </>
-          ) : (
-            <>
-              <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    select
-                    label="Patient"
-                    name="patient"
-                    value={formState.patient || ''}
-                    onChange={handleChange}
-                    fullWidth
-                    margin="normal"
-                  >
-                    {patients.map((patient) => (
-                      <MenuItem key={patient.id} value={patient.id}>
-                        {patient.first_name} {patient.last_name}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    select
-                    label="Behandler"
-                    name="practitioner"
-                    value={formState.practitioner || ''}
-                    onChange={handleChange}
-                    fullWidth
-                    margin="normal"
-                  >
-                    {practitioners.map((practitioner) => (
-                      <MenuItem key={practitioner.id} value={practitioner.id}>
-                        {practitioner.first_name} {practitioner.last_name}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    select
-                    label="Raum"
-                    name="room"
-                    value={formState.room || ''}
-                    onChange={handleChange}
-                    fullWidth
-                    margin="normal"
-                  >
-                    {rooms.map((room) => (
-                      <MenuItem key={room.id} value={room.id}>
-                        {room.name}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    select
-                    label="Behandlung"
-                    name="treatment"
-                    value={formState.treatment || ''}
-                    onChange={handleChange}
-                    fullWidth
-                    margin="normal"
-                  >
-                    {treatments.map((treatment) => (
-                      <MenuItem key={treatment.id} value={treatment.id}>
-                        {treatment.treatment_name}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="Datum & Uhrzeit"
-                    type="datetime-local"
-                    name="appointment_date"
-                    value={formState.appointment_date ? formState.appointment_date.slice(0, 16) : ''}
-                    onChange={handleChange}
-                    fullWidth
-                    margin="normal"
-                    InputLabelProps={{ shrink: true }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="Dauer (Minuten)"
-                    name="duration_minutes"
-                    value={formState.duration_minutes || ''}
-                    onChange={handleChange}
-                    fullWidth
-                    margin="normal"
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    select
-                    label="Status"
-                    name="status"
-                    value={formState.status || ''}
-                    onChange={handleChange}
-                    fullWidth
-                    margin="normal"
-                  >
-                    <MenuItem value="planned">Geplant</MenuItem>
-                    <MenuItem value="confirmed">Bestätigt</MenuItem>
-                    <MenuItem value="completed">Abgeschlossen</MenuItem>
-                    <MenuItem value="ready_to_bill">Abrechnungsbereit</MenuItem>
-                    <MenuItem value="billed">Abgerechnet</MenuItem>
-                    <MenuItem value="cancelled">Storniert</MenuItem>
-                    <MenuItem value="no_show">Nicht erschienen</MenuItem>
-                  </TextField>
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    label="Notizen"
-                    name="notes"
-                    value={formState.notes || ''}
-                    onChange={handleChange}
-                    fullWidth
-                    margin="normal"
-                    multiline
-                    rows={3}
-                  />
-                </Grid>
-              </Grid>
-              <Divider sx={{ my: 2 }} />
-              <Box display="flex" justifyContent="flex-end" gap={2}>
-                <Button variant="contained" color="success" startIcon={<Save />} onClick={handleUpdate}>
-                  Speichern
-                </Button>
-                <Button variant="outlined" startIcon={<Cancel />} onClick={() => setEditMode(false)}>
-                  Abbrechen
-                </Button>
-              </Box>
-            </>
-          )}
-        </CardContent>
-      </Card>
+      </Box>
     </Box>
   );
 }

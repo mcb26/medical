@@ -143,9 +143,6 @@ function AppointmentList() {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h4" sx={{ mb: 3 }}>
-        Terminliste
-      </Typography>
       <Paper sx={{ height: 'calc(100vh - 200px)', width: '100%' }}>
         <DataGrid
           rows={appointments}

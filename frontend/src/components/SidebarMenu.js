@@ -18,6 +18,7 @@ function SidebarMenu({ drawerOpen, toggleDrawer }) {
   const menuItems = [
     { text: 'Start', icon: <HomeIcon />, path: '/' },
     { text: 'Kalender', icon: <CalendarIcon />, path: '/calendar' },
+    { text: 'Termine', icon: <CalendarIcon />, path: '/appointments' },
     { text: 'Verordnungen', icon: <FeedIcon />, path: '/prescriptions' },
     { text: 'Patienten', icon: <PeopleIcon />, path: '/patients' },
     { text: 'Krankenkassen', icon: <SpaIcon />, path: '/insurance-management' },

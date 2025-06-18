@@ -13,7 +13,8 @@ import {
   Alert,
   Divider,
   CircularProgress,
-  Chip
+  Chip,
+  CardContent
 } from '@mui/material';
 import {
   Home as HomeIcon,
@@ -145,100 +146,100 @@ function PrescriptionEdit() {
   }
 
   return (
-    <Box sx={{ p: 3, backgroundColor: '#f5f5f5' }}>
-      <Paper elevation={3} sx={{ p: 3, maxWidth: 1000, mx: 'auto' }}>
-        {/* Header */}
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={6}>
-            <Typography variant="h6" sx={{ color: '#1976d2' }}>
-              {formData.insurance_provider_name}
-            </Typography>
-          </Grid>
-          <Grid item xs={6} sx={{ textAlign: 'right' }}>
-            <Typography variant="h6">Heilmittelverordnung bearbeiten</Typography>
-          </Grid>
-        </Grid>
-
-        <Divider sx={{ mb: 3 }} />
-
-        <form onSubmit={handleSubmit}>
-          <Grid container spacing={3}>
-            {/* Versichertendaten - ohne Betriebsstättennummer */}
-            <Grid item xs={12} md={6}>
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold' }}>
-                  Versichertendaten
-                </Typography>
-                <TextField
-                  fullWidth
-                  margin="normal"
-                  label="Versicherten-Nr."
-                  value={formData.insurance_number}
-                  disabled
-                />
-              </Paper>
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold' }}>
-                  Patient/in
-                </Typography>
-                <TextField
-                  select
-                  fullWidth
-                  margin="normal"
-                  label="Patient"
-                  value={formData.patient}
-                  onChange={(e) => setFormData({ ...formData, patient: e.target.value })}
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <Box component="main" sx={{ flexGrow: 1, p: 0 }}>
+        <Box sx={{ mx: 0 }}>
+          {/* Header */}
+          <Paper elevation={3} sx={{ p: 3, mb: 3, borderRadius: 2, backgroundColor: '#f5f5f5' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="h4">Heilmittelverordnung bearbeiten</Typography>
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<CancelIcon />}
+                  onClick={() => navigate(`/prescriptions/${id}`)}
                 >
-                  {options.patients.map((patient) => (
-                    <MenuItem key={patient.id} value={patient.id}>
-                      {`${patient.first_name} ${patient.last_name}`}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </Paper>
-            </Grid>
-
-            {/* Arztdaten mit Betriebsstättennummer */}
-            <Grid item xs={12} md={6}>
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold' }}>
-                  Verordnender Arzt
-                </Typography>
-                <TextField
-                  select
-                  required
-                  fullWidth
-                  label="Arzt"
-                  value={formData.doctor}
-                  onChange={handleDoctorChange}
-                  margin="normal"
+                  Abbrechen
+                </Button>
+                <Button
+                  type="submit"
+                  variant="contained"
+                  color="primary"
+                  startIcon={<SaveIcon />}
+                  onClick={handleSubmit}
                 >
-                  {options.doctors.map((doctor) => (
-                    <MenuItem key={doctor.id} value={doctor.id}>
-                      {`${doctor.title || ''} ${doctor.first_name} ${doctor.last_name} (${doctor.license_number})`}
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <TextField
-                  fullWidth
-                  margin="normal"
-                  label="Betriebsstättennummer"
-                  value={formData.provider_number}
-                  disabled
-                />
-              </Paper>
-            </Grid>
+                  Speichern
+                </Button>
+              </Box>
+            </Box>
+          </Paper>
 
-            {/* Behandlungen */}
-            <Grid item xs={12}>
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold' }}>
-                  Behandlungen
-                </Typography>
-                <Grid container spacing={2}>
+          {/* Content */}
+          <Paper elevation={3} sx={{ borderRadius: 2 }}>
+            <CardContent>
+              <form onSubmit={handleSubmit}>
+                <Grid container spacing={3}>
+                  {/* Versichertendaten */}
+                  <Grid item xs={12}>
+                    <Typography variant="h6" gutterBottom>Versichertendaten</Typography>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Versicherten-Nr."
+                      value={formData.insurance_number}
+                      disabled
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      select
+                      fullWidth
+                      label="Patient"
+                      value={formData.patient}
+                      onChange={(e) => setFormData({ ...formData, patient: e.target.value })}
+                    >
+                      {options.patients.map((patient) => (
+                        <MenuItem key={patient.id} value={patient.id}>
+                          {`${patient.first_name} ${patient.last_name}`}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+
+                  {/* Arztdaten */}
+                  <Grid item xs={12}>
+                    <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>Verordnender Arzt</Typography>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      select
+                      required
+                      fullWidth
+                      label="Arzt"
+                      value={formData.doctor}
+                      onChange={handleDoctorChange}
+                    >
+                      {options.doctors.map((doctor) => (
+                        <MenuItem key={doctor.id} value={doctor.id}>
+                          {`${doctor.title || ''} ${doctor.first_name} ${doctor.last_name} (${doctor.license_number})`}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Betriebsstättennummer"
+                      value={formData.provider_number}
+                      disabled
+                    />
+                  </Grid>
+
+                  {/* Behandlungen */}
+                  <Grid item xs={12}>
+                    <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>Behandlungen</Typography>
+                  </Grid>
                   <Grid item xs={12} md={4}>
                     <TextField
                       select
@@ -247,7 +248,6 @@ function PrescriptionEdit() {
                       label="Behandlung 1"
                       value={formData.treatment}
                       onChange={(e) => setFormData({ ...formData, treatment: e.target.value })}
-                      margin="normal"
                     >
                       {options.treatments.map((treatment) => (
                         <MenuItem key={treatment.id} value={treatment.id}>
@@ -263,7 +263,6 @@ function PrescriptionEdit() {
                       label="Behandlung 2 (optional)"
                       value={formData.treatment_2}
                       onChange={(e) => setFormData({ ...formData, treatment_2: e.target.value })}
-                      margin="normal"
                     >
                       <MenuItem value="">Keine zusätzliche Behandlung</MenuItem>
                       {options.treatments.map((treatment) => (
@@ -280,7 +279,6 @@ function PrescriptionEdit() {
                       label="Behandlung 3 (optional)"
                       value={formData.treatment_3}
                       onChange={(e) => setFormData({ ...formData, treatment_3: e.target.value })}
-                      margin="normal"
                     >
                       <MenuItem value="">Keine zusätzliche Behandlung</MenuItem>
                       {options.treatments.map((treatment) => (
@@ -290,36 +288,29 @@ function PrescriptionEdit() {
                       ))}
                     </TextField>
                   </Grid>
-                </Grid>
-              </Paper>
-            </Grid>
 
-            {/* Status */}
-            <Grid item xs={12} md={6}>
-              <TextField
-                select
-                fullWidth
-                label="Status"
-                value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                margin="normal"
-              >
-                <MenuItem value="Open">Offen</MenuItem>
-                <MenuItem value="Planned">Geplant</MenuItem>
-                <MenuItem value="In_Progress">In Behandlung</MenuItem>
-                <MenuItem value="Completed">Abgeschlossen</MenuItem>
-                <MenuItem value="Cancelled">Storniert</MenuItem>
-                <MenuItem value="Billed">Abgerechnet</MenuItem>
-              </TextField>
-            </Grid>
+                  {/* Status */}
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      select
+                      fullWidth
+                      label="Status"
+                      value={formData.status}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    >
+                      <MenuItem value="Open">Offen</MenuItem>
+                      <MenuItem value="Planned">Geplant</MenuItem>
+                      <MenuItem value="In_Progress">In Behandlung</MenuItem>
+                      <MenuItem value="Completed">Abgeschlossen</MenuItem>
+                      <MenuItem value="Cancelled">Storniert</MenuItem>
+                      <MenuItem value="Billed">Abgerechnet</MenuItem>
+                    </TextField>
+                  </Grid>
 
-            {/* Diagnose und ICD-Code */}
-            <Grid item xs={12}>
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold' }}>
-                  Diagnosegruppe
-                </Typography>
-                <Grid container spacing={2}>
+                  {/* Diagnose */}
+                  <Grid item xs={12}>
+                    <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>Diagnose</Typography>
+                  </Grid>
                   <Grid item xs={12} md={6}>
                     <TextField
                       select
@@ -352,36 +343,65 @@ function PrescriptionEdit() {
                       disabled
                     />
                   </Grid>
+
+                  {/* Therapieziele */}
+                  <Grid item xs={12}>
+                    <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>Therapieziele</Typography>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      multiline
+                      rows={4}
+                      label="Therapieziele"
+                      value={formData.therapy_goals}
+                      onChange={(e) => setFormData({ ...formData, therapy_goals: e.target.value })}
+                    />
+                  </Grid>
+
+                  {/* Optionen */}
+                  <Grid item xs={12}>
+                    <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>Optionen</Typography>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={formData.is_urgent}
+                          onChange={(e) => setFormData({ ...formData, is_urgent: e.target.checked })}
+                        />
+                      }
+                      label="Dringend"
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={formData.requires_home_visit}
+                          onChange={(e) => setFormData({ ...formData, requires_home_visit: e.target.checked })}
+                        />
+                      }
+                      label="Hausbesuch erforderlich"
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={formData.therapy_report_required}
+                          onChange={(e) => setFormData({ ...formData, therapy_report_required: e.target.checked })}
+                        />
+                      }
+                      label="Therapiebericht erforderlich"
+                    />
+                  </Grid>
                 </Grid>
-              </Paper>
-            </Grid>
-
-            {/* Rest der Felder analog zu PrescriptionNew.js */}
-            {/* ... */}
-
-            {/* Aktionsbuttons */}
-            <Grid item xs={12}>
-              <Box sx={{ mt: 3, display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
-                <Button 
-                  variant="outlined" 
-                  onClick={() => navigate(`/prescriptions/${id}`)}
-                  startIcon={<HomeIcon />}
-                >
-                  Zurück
-                </Button>
-                <Button 
-                  type="submit"
-                  variant="contained"
-                  color="primary"
-                  startIcon={<SaveIcon />}
-                >
-                  Speichern
-                </Button>
-              </Box>
-            </Grid>
-          </Grid>
-        </form>
-      </Paper>
+              </form>
+            </CardContent>
+          </Paper>
+        </Box>
+      </Box>
     </Box>
   );
 }

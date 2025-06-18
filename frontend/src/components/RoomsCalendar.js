@@ -3,7 +3,17 @@ import BaseCalendar from './BaseCalendar';
 import api from '../api/axios';
 import { useNavigate } from 'react-router-dom';
 
-const RoomsCalendar = ({ view, date, onViewChange, onDateChange, selectedResources, resources }) => {
+const RoomsCalendar = ({ 
+    view, 
+    date, 
+    onViewChange, 
+    onDateChange, 
+    selectedResources, 
+    resources,
+    onPrev,
+    onNext,
+    onToday 
+}) => {
     const [rooms, setRooms] = useState([]);
     const [events, setEvents] = useState([]);
     const navigate = useNavigate();
@@ -92,7 +102,13 @@ const RoomsCalendar = ({ view, date, onViewChange, onDateChange, selectedResourc
                 title: ev.treatment_name || "Termin",
                 start: ev.appointment_date,
                 end: new Date(new Date(ev.appointment_date).getTime() + (ev.duration_minutes || 30) * 60000).toISOString(),
-                resourceId: `room-${ev.room}`
+                resourceId: `room-${ev.room}`,
+                extendedProps: {
+                    treatment_name: ev.treatment_name,
+                    patient_name: ev.patient_name,
+                    duration_minutes: ev.duration_minutes,
+                    treatment_color: ev.treatment_color
+                }
             }))}
             resourceType="rooms"
             calendarKey="rooms"
@@ -103,6 +119,11 @@ const RoomsCalendar = ({ view, date, onViewChange, onDateChange, selectedResourc
             onEventDrop={handleEventDrop}
             onEventResize={handleEventResize}
             onEventDoubleClick={handleEventDoubleClick}
+            resourceAreaHeaderContent="Räume"
+            dayHeaderFormat="dddd, dd.MM.yyyy"
+            onPrev={onPrev}
+            onNext={onNext}
+            onToday={onToday}
         />
     );
 };

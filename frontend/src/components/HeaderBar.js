@@ -75,6 +75,20 @@ function HeaderBar({ toggleDrawer, title, showAddIcon }) {
                 navigate("/treatments/new");
               } else if (title === "Kalender") {
                 navigate("/appointments/new");
+              } else if (title === "Termin-Details") {
+                navigate("/appointments/new");
+              } else if (title === "Verordnung-Details") {
+                navigate("/prescriptions/new");
+              } else if (title === "Patient-Details") {
+                navigate("/patients/new");
+              } else if (title === "Heilmittel-Details") {
+                navigate("/treatments/new");
+              } else if (title === "Raum-Details") {
+                navigate("/rooms/new");
+              } else if (title === "Termin-Liste") {
+                navigate("/appointments/new");
+              } else if (title === "Behandler-Details") {
+                navigate("/practitioners/new");
               }
             }}
           >

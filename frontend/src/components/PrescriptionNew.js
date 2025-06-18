@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
 import {
   Box,
@@ -15,6 +15,8 @@ import {
 
 function PrescriptionNew() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const prescriptionId = searchParams.get('prescriptionId');
   const [error, setError] = useState('');
   const [formData, setFormData] = useState({
     patient: '',
@@ -22,10 +24,7 @@ function PrescriptionNew() {
     treatment_1: '',
     treatment_2: '',
     treatment_3: '',
-    diagnosis_group: {
-      id: '',
-      name: ''
-    },
+    diagnosis_group: '',
     diagnosis_code: '',
     diagnosis_text: '',
     treatment_type: 'Physiotherapie',
@@ -88,6 +87,19 @@ function PrescriptionNew() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if (prescriptionId) {
+      api.get(`/prescriptions/${prescriptionId}/`).then(res => {
+        setFormData(prev => ({
+          ...prev,
+          patient: res.data.patient,
+          treatment_1: res.data.treatment_1,
+          number_of_sessions: res.data.number_of_sessions
+        }));
+      });
+    }
+  }, [prescriptionId]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -102,7 +114,12 @@ function PrescriptionNew() {
       const dataToSend = {
         ...formData,
         treatment_2: formData.treatment_2 || null,
-        treatment_3: formData.treatment_3 || null
+        treatment_3: formData.treatment_3 || null,
+        diagnosis_group: formData.diagnosis_group || null,
+        diagnosis_code: formData.diagnosis_code || null,
+        diagnosis_text: formData.diagnosis_text || null,
+        number_of_sessions: parseInt(formData.number_of_sessions),
+        sessions_completed: parseInt(formData.sessions_completed)
       };
 
       const response = await api.post('prescriptions/', dataToSend);
@@ -150,13 +167,11 @@ function PrescriptionNew() {
               value={formData.diagnosis_code}
               onChange={(e) => {
                 const selectedIcd = options.icd_codes.find(code => code.id === e.target.value);
-                const diagnosisGroup = selectedIcd?.diagnosis_group || { id: '', name: '' };
-                
                 setFormData({
                   ...formData,
                   diagnosis_code: e.target.value,
                   diagnosis_text: selectedIcd?.description || '',
-                  diagnosis_group: diagnosisGroup
+                  diagnosis_group: selectedIcd?.diagnosis_group?.id || ''
                 });
               }}
               margin="normal"
@@ -173,7 +188,7 @@ function PrescriptionNew() {
             <TextField
               fullWidth
               label="Diagnosegruppe"
-              value={formData.diagnosis_group.name}
+              value={options.icd_codes.find(code => code.id === formData.diagnosis_code)?.diagnosis_group?.name || ''}
               disabled
               margin="normal"
               helperText="Wird automatisch aus dem ICD-10 Code ermittelt"

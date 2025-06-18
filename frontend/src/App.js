@@ -75,6 +75,7 @@ import DoctorDetail from './components/DoctorDetail';
 import BulkBillingForm from './components/BulkBillingForm';
 import FinanceOverview from './components/FinanceOverview';
 import PatientEdit from './components/PatientEdit';
+import AppointmentSeriesNew from './components/AppointmentSeriesNew';
 
 
 function App() {
@@ -85,6 +86,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/patients" element={<PatientList />} />
+          <Route path="/appointments/series/new" element={<AppointmentSeriesNew />} />
           <Route path="/patients/:id" element={<PatientDetail />} />
           <Route path="/prescriptions" element={<PrescriptionList />} />
           <Route path="/insurance-management" element={<InsuranceManagement />} />

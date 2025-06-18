@@ -9,20 +9,10 @@ import {
   Button,
   TextField,
   InputAdornment,
-  IconButton,
-  Tooltip,
-  Chip,
   Typography,
   Grid,
   Card,
-  CardContent,
-  CardHeader,
-  Divider,
-  Menu,
-  MenuItem,
-  ListItemIcon,
-  ListItemText,
-  Badge
+  CardContent
 } from '@mui/material';
 import {
   Person as PersonIcon,
@@ -48,21 +38,14 @@ import {
   Group as InsuranceGroupIcon,
   Add as AddIcon,
   Search as SearchIcon,
-  FilterList as FilterIcon,
-  MoreVert as MoreVertIcon,
   Download as DownloadIcon,
   Print as PrintIcon,
   Refresh as RefreshIcon,
-  Delete as DeleteIcon,
-  Edit as EditIcon,
-  Visibility as ViewIcon,
-  Assessment as StatsIcon
+  Delete as DeleteIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { DataGrid, GridToolbar } from '@mui/x-data-grid';
-import { format } from 'date-fns';
-import { de } from 'date-fns/locale';
 
 function DataOverview() {
   const [activeTab, setActiveTab] = useState(0);
@@ -93,7 +76,6 @@ function DataOverview() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterAnchorEl, setFilterAnchorEl] = useState(null);
   const [selectedRows, setSelectedRows] = useState([]);
   const [stats, setStats] = useState({});
   const navigate = useNavigate();
@@ -203,8 +185,8 @@ function DataOverview() {
       });
       setLoading(false);
     } catch (error) {
-      console.error('Kritischer Fehler beim Laden der Daten:', error);
-      setError('Ein unerwarteter Fehler ist aufgetreten');
+      console.error('Fehler beim Laden der Daten:', error);
+      setError('Fehler beim Laden der Daten');
       setLoading(false);
     }
   };
@@ -216,31 +198,37 @@ function DataOverview() {
 
   const handleExport = async (format) => {
     try {
-      const response = await api.get(`/export/${activeTab}/${format}/`);
-      const blob = new Blob([response.data], { type: 'text/csv' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `export.${format}`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      const response = await api.get(`/export/${activeTab}`, {
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `export.${format}`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
     } catch (error) {
       console.error('Fehler beim Exportieren:', error);
+      setError('Fehler beim Exportieren der Daten');
     }
   };
 
   const handleDelete = async () => {
-    if (window.confirm('Möchten Sie die ausgewählten Einträge wirklich löschen?')) {
-      try {
-        await Promise.all(selectedRows.map(id => 
-          api.delete(`/${activeTab}/${id}/`)
-        ));
-        fetchAllData();
-      } catch (error) {
-        console.error('Fehler beim Löschen:', error);
-      }
+    if (!selectedRows.length) return;
+    
+    if (!window.confirm(`Möchten Sie wirklich ${selectedRows.length} Einträge löschen?`)) {
+      return;
+    }
+
+    try {
+      await Promise.all(
+        selectedRows.map(id => api.delete(`/${activeTab}/${id}/`))
+      );
+      handleRefresh();
+    } catch (error) {
+      console.error('Fehler beim Löschen:', error);
+      setError('Fehler beim Löschen der Daten');
     }
   };
 
@@ -248,45 +236,31 @@ function DataOverview() {
     window.print();
   };
 
-  const handleFilterClick = (event) => {
-    setFilterAnchorEl(event.currentTarget);
-  };
-
-  const handleFilterClose = () => {
-    setFilterAnchorEl(null);
-  };
-
   const renderStatsCard = (title, value, icon, color) => (
     <Card sx={{ height: '100%' }}>
       <CardContent>
-        <Grid container spacing={2} alignItems="center">
-          <Grid item>
-            <Box sx={{ 
-              backgroundColor: `${color}.light`, 
-              borderRadius: '50%', 
-              p: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              {icon}
-            </Box>
-          </Grid>
-          <Grid item xs>
-            <Typography variant="h6" component="div">
-              {value}
-            </Typography>
-            <Typography color="text.secondary" variant="body2">
-              {title}
-            </Typography>
-          </Grid>
-        </Grid>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+          {React.createElement(icon, { sx: { color, mr: 1 } })}
+          <Typography variant="h6" component="div">
+            {title}
+          </Typography>
+        </Box>
+        <Typography variant="h4" component="div" sx={{ color }}>
+          {value}
+        </Typography>
       </CardContent>
     </Card>
   );
 
   const renderActionButtons = () => (
-    <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+    <Box sx={{ mb: 2, display: 'flex', gap: 1 }}>
+      <Button
+        variant="contained"
+        startIcon={<AddIcon />}
+        onClick={() => navigate(`/${activeTab}/new`)}
+      >
+        Neu
+      </Button>
       <Button
         variant="outlined"
         startIcon={<RefreshIcon />}
@@ -299,7 +273,7 @@ function DataOverview() {
         startIcon={<DownloadIcon />}
         onClick={() => handleExport('csv')}
       >
-        Exportieren
+        Export CSV
       </Button>
       <Button
         variant="outlined"
@@ -321,123 +295,35 @@ function DataOverview() {
     </Box>
   );
 
-  const columns = {
-    patients: [
-      { field: 'fullName', headerName: 'Name', width: 200 },
-      { field: 'formattedBirthDate', headerName: 'Geburtsdatum', width: 120 },
-      { field: 'email', headerName: 'E-Mail', width: 200 },
-      { field: 'phone_number', headerName: 'Telefon', width: 150 }
-    ],
-    appointments: [
-      { field: 'patient_name', headerName: 'Patient', width: 200 },
-      { field: 'appointment_date', headerName: 'Termin', width: 180 },
-      { field: 'treatment_name', headerName: 'Behandlung', width: 200 },
-      { field: 'status', headerName: 'Status', width: 120 }
-    ],
-    prescriptions: [
-      { field: 'patient_name', headerName: 'Patient', width: 200 },
-      { field: 'doctor_name', headerName: 'Arzt', width: 200 },
-      { field: 'treatment_1_name', headerName: 'Behandlung', width: 200 },
-      { field: 'status', headerName: 'Status', width: 120 }
-    ],
-    treatments: [
-      { field: 'treatment_name', headerName: 'Behandlung', width: 200 },
-      { field: 'duration_minutes', headerName: 'Dauer (Min)', width: 120 },
-      { field: 'category', headerName: 'Kategorie', width: 150 }
-    ],
-    practitioners: [
-      { field: 'name', headerName: 'Name', width: 200 },
-      { field: 'is_active', headerName: 'Status', width: 120 }
-    ],
-    rooms: [
-      { field: 'name', headerName: 'Name', width: 150 },
-      { field: 'capacity', headerName: 'Kapazität', width: 120 },
-      { field: 'is_active', headerName: 'Status', width: 120 }
-    ],
-    doctors: [
-      { field: 'fullName', headerName: 'Name', width: 200 },
-      { field: 'specializations', headerName: 'Fachgebiete', width: 200 },
-      { field: 'email', headerName: 'E-Mail', width: 200 }
-    ],
-    insuranceProviders: [
-      { field: 'name', headerName: 'Name', width: 200 },
-      { field: 'type', headerName: 'Typ', width: 120 }
-    ],
-    insuranceProviderGroups: [
-      { field: 'name', headerName: 'Name', width: 200 },
-      { field: 'description', headerName: 'Beschreibung', width: 300 }
-    ],
-    categories: [
-      { field: 'name', headerName: 'Name', width: 200 },
-      { field: 'description', headerName: 'Beschreibung', width: 300 }
-    ],
-    specializations: [
-      { field: 'name', headerName: 'Name', width: 200 },
-      { field: 'description', headerName: 'Beschreibung', width: 300 }
-    ],
-    icdCodes: [
-      { field: 'code', headerName: 'Code', width: 120 },
-      { field: 'title', headerName: 'Titel', width: 200 },
-      { field: 'description', headerName: 'Beschreibung', width: 300 }
-    ],
-    diagnosisGroups: [
-      { field: 'name', headerName: 'Name', width: 200 },
-      { field: 'description', headerName: 'Beschreibung', width: 300 }
-    ],
-    billingCycles: [
-      { field: 'name', headerName: 'Name', width: 200 },
-      { field: 'period', headerName: 'Zeitraum', width: 150 }
-    ],
-    surcharges: [
-      { field: 'name', headerName: 'Name', width: 200 },
-      { field: 'amount', headerName: 'Betrag', width: 120 }
-    ],
-    emergencyContacts: [
-      { field: 'name', headerName: 'Name', width: 200 },
-      { field: 'phone_number', headerName: 'Telefon', width: 150 },
-      { field: 'relationship', headerName: 'Beziehung', width: 150 }
-    ],
-    bundeslaender: [
-      { field: 'name', headerName: 'Name', width: 200 },
-      { field: 'abbreviation', headerName: 'Kürzel', width: 100 }
-    ],
-    localHolidays: [
-      { field: 'holiday_name', headerName: 'Name', width: 200 },
-      { field: 'date', headerName: 'Datum', width: 120 }
-    ],
-    workingHours: [
-      { field: 'day_of_week', headerName: 'Wochentag', width: 120 },
-      { field: 'start_time', headerName: 'Von', width: 100 },
-      { field: 'end_time', headerName: 'Bis', width: 100 }
-    ],
-    practices: [
-      { field: 'name', headerName: 'Name', width: 200 },
-      { field: 'city', headerName: 'Stadt', width: 150 },
-      { field: 'phone', headerName: 'Telefon', width: 150 }
-    ]
-  };
-
-  // Hilfsfunktion zum Überprüfen der Daten
   const getValidRows = (key) => {
-    if (!data[key] || !Array.isArray(data[key])) {
-      return [];
-    }
-    return data[key].map((item, index) => ({
-      ...item,
-      id: item.id || index // Fallback-ID wenn keine vorhanden
+    const rows = data[key] || [];
+    return rows.map(row => ({
+      ...row,
+      id: row.id || row.uuid || Math.random().toString(36).substr(2, 9)
     }));
   };
 
-  // Hilfsfunktion zum Überprüfen der Spalten
   const getValidColumns = (key) => {
-    if (!columns[key] || !Array.isArray(columns[key])) {
-      return [{ field: 'id', headerName: 'ID', width: 100 }];
-    }
-    return columns[key];
+    const columns = {
+      patients: [
+        { field: 'first_name', headerName: 'Vorname', width: 150 },
+        { field: 'last_name', headerName: 'Nachname', width: 150 },
+        { field: 'date_of_birth', headerName: 'Geburtsdatum', width: 120 },
+        { field: 'insurance_number', headerName: 'Versicherungsnummer', width: 150 }
+      ],
+      appointments: [
+        { field: 'date', headerName: 'Datum', width: 150 },
+        { field: 'time', headerName: 'Uhrzeit', width: 100 },
+        { field: 'patient_name', headerName: 'Patient', width: 200 },
+        { field: 'treatment_name', headerName: 'Behandlung', width: 200 }
+      ],
+      // ... weitere Spalten für andere Tabs
+    };
+    return columns[key] || [];
   };
 
   const getCreatePath = (key) => {
-    const pathMap = {
+    const paths = {
       patients: '/patients/new',
       appointments: '/appointments/new',
       prescriptions: '/prescriptions/new',
@@ -446,7 +332,7 @@ function DataOverview() {
       rooms: '/rooms/new',
       doctors: '/doctors/new',
       insuranceProviders: '/insurance-providers/new',
-      insuranceProviderGroups: '/insurance-groups/new',
+      insuranceProviderGroups: '/insurance-provider-groups/new',
       categories: '/categories/new',
       specializations: '/specializations/new',
       icdCodes: '/icdcodes/new',
@@ -455,212 +341,106 @@ function DataOverview() {
       surcharges: '/surcharges/new',
       emergencyContacts: '/emergency-contacts/new',
       practiceSettings: '/practice-settings/new',
-      calendarSettings: '/calendar-settings/new',
+      calendarSettings: '/settings/new',
       bundeslaender: '/bundesland/new',
       localHolidays: '/local-holidays/new',
       workingHours: '/working-hours/new',
       practices: '/practice/new'
     };
-    return pathMap[key] || `/${key}/new`;
+    return paths[key] || '/';
   };
 
-  // Funktion zum Erstellen einer neuen Instanz
   const handleCreate = (key) => {
-    const path = getCreatePath(key);
-    navigate(path);
+    navigate(getCreatePath(key));
   };
-
-  // Custom Toolbar Komponente
-  const CustomToolbar = React.memo(({ tableKey }) => {
-    return (
-      <Box sx={{ 
-        p: 1, 
-        display: 'flex', 
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        <GridToolbar />
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleCreate(tableKey)}
-          sx={{ ml: 2 }}
-        >
-          Neu erstellen
-        </Button>
-      </Box>
-    );
-  });
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
         <CircularProgress />
       </Box>
     );
   }
 
   if (error) {
-    return <Alert severity="error">{error}</Alert>;
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error">{error}</Alert>
+      </Box>
+    );
   }
-
-  const dataKeys = Object.keys(data);
 
   return (
     <Box sx={{ p: 3 }}>
-      {/* Statistik-Karten */}
+      <Typography variant="h4" sx={{ mb: 3 }}>
+        Datenübersicht
+      </Typography>
+
       <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          {renderStatsCard(
-            'Aktive Patienten',
-            stats.activePatients || 0,
-            <PersonIcon sx={{ color: 'primary.main' }} />,
-            'primary'
-          )}
+        <Grid item xs={12} md={3}>
+          {renderStatsCard('Patienten', stats.patients || 0, PersonIcon, '#1976d2')}
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          {renderStatsCard(
-            'Termine heute',
-            stats.todayAppointments || 0,
-            <EventIcon sx={{ color: 'success.main' }} />,
-            'success'
-          )}
+        <Grid item xs={12} md={3}>
+          {renderStatsCard('Termine', stats.appointments || 0, EventIcon, '#2e7d32')}
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          {renderStatsCard(
-            'Offene Rechnungen',
-            stats.openInvoices || 0,
-            <BillingIcon sx={{ color: 'warning.main' }} />,
-            'warning'
-          )}
+        <Grid item xs={12} md={3}>
+          {renderStatsCard('Behandlungen', stats.treatments || 0, TreatmentIcon, '#ed6c02')}
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          {renderStatsCard(
-            'Aktive Behandler',
-            stats.activePractitioners || 0,
-            <DoctorIcon sx={{ color: 'info.main' }} />,
-            'info'
-          )}
+        <Grid item xs={12} md={3}>
+          {renderStatsCard('Rezepte', stats.prescriptions || 0, PrescriptionIcon, '#9c27b0')}
         </Grid>
       </Grid>
 
-      <Paper sx={{ width: '100%', mb: 2 }}>
-        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs 
-            value={activeTab} 
-            onChange={(e, newValue) => setActiveTab(newValue)}
-            variant="scrollable"
-            scrollButtons="auto"
-            aria-label="data overview tabs"
-          >
-            <Tab icon={<PersonIcon />} label="Patienten" />
-            <Tab icon={<EventIcon />} label="Termine" />
-            <Tab icon={<PrescriptionIcon />} label="Verordnungen" />
-            <Tab icon={<TreatmentIcon />} label="Behandlungen" />
-            <Tab icon={<PersonIcon />} label="Therapeuten" />
-            <Tab icon={<RoomIcon />} label="Räume" />
-            <Tab icon={<DoctorIcon />} label="Ärzte" />
-            <Tab icon={<InsuranceIcon />} label="Versicherungen" />
-            <Tab icon={<InsuranceGroupIcon />} label="Versicherungsgruppen" />
-            <Tab icon={<CategoryIcon />} label="Kategorien" />
-            <Tab icon={<SpecializationIcon />} label="Spezialisierungen" />
-            <Tab icon={<ICDCodeIcon />} label="ICD Codes" />
-            <Tab icon={<DiagnosisIcon />} label="Diagnosegruppen" />
-            <Tab icon={<BillingIcon />} label="Abrechnungszyklen" />
-            <Tab icon={<SurchargeIcon />} label="Zuschläge" />
-            <Tab icon={<EmergencyContactIcon />} label="Notfallkontakte" />
-            <Tab icon={<SettingsIcon />} label="Praxiseinstellungen" />
-            <Tab icon={<CalendarIcon />} label="Kalendereinstellungen" />
-            <Tab icon={<BundeslandIcon />} label="Bundesländer" />
-            <Tab icon={<HolidayIcon />} label="Feiertage" />
-            <Tab icon={<WorkingHourIcon />} label="Arbeitszeiten" />
-            <Tab icon={<PracticeIcon />} label="Praxen" />
-          </Tabs>
-        </Box>
-
-        <Box sx={{ p: 2 }}>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                variant="outlined"
-                placeholder="Suchen..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              {renderActionButtons()}
-            </Grid>
-          </Grid>
-        </Box>
-
-        {dataKeys.map((key, index) => (
-          activeTab === index && (
-            <Box key={key} sx={{ height: 600, width: '100%' }}>
-              <DataGrid
-                rows={getValidRows(key)}
-                columns={getValidColumns(key)}
-                loading={loading}
-                checkboxSelection
-                onRowSelectionModelChange={(newSelection) => {
-                  setSelectedRows(newSelection);
-                }}
-                slots={{
-                  toolbar: GridToolbar,
-                }}
-                slotProps={{
-                  toolbar: {
-                    showQuickFilter: true,
-                    quickFilterProps: { debounceMs: 500 },
-                  },
-                }}
-                initialState={{
-                  pagination: {
-                    paginationModel: { pageSize: 25 },
-                  },
-                }}
-                pageSizeOptions={[10, 25, 50, 100]}
-                onRowClick={(params) => navigate(`/${key}/${params.row.id}`)}
-                sx={{
-                  '& .MuiDataGrid-root': {
-                    border: 'none',
-                  },
-                  '& .MuiDataGrid-row': {
-                    cursor: 'pointer',
-                    '&:hover': {
-                      backgroundColor: 'rgba(0, 0, 0, 0.04)',
-                    },
-                  },
-                }}
-                density="compact"
-                localeText={{
-                  toolbarDensity: 'Zeilenhöhe',
-                  toolbarDensityLabel: 'Zeilenhöhe',
-                  toolbarDensityCompact: 'Kompakt',
-                  toolbarDensityStandard: 'Standard',
-                  toolbarDensityComfortable: 'Komfortabel',
-                  toolbarColumns: 'Spalten',
-                  toolbarColumnsLabel: 'Spalten auswählen',
-                  toolbarFilters: 'Filter',
-                  toolbarFiltersLabel: 'Filter anzeigen',
-                  toolbarFiltersTooltipHide: 'Filter ausblenden',
-                  toolbarFiltersTooltipShow: 'Filter anzeigen',
-                  toolbarQuickFilterPlaceholder: 'Suchen...',
-                  noRowsLabel: 'Keine Daten verfügbar',
-                }}
-              />
-            </Box>
-          )
-        ))}
+      <Paper sx={{ p: 2, mb: 3 }}>
+        <Tabs
+          value={activeTab}
+          onChange={(e, newValue) => setActiveTab(newValue)}
+          variant="scrollable"
+          scrollButtons="auto"
+        >
+          <Tab label="Patienten" />
+          <Tab label="Termine" />
+          <Tab label="Rezepte" />
+          <Tab label="Behandlungen" />
+          <Tab label="Behandler" />
+          <Tab label="Räume" />
+          <Tab label="Ärzte" />
+          <Tab label="Krankenkassen" />
+          <Tab label="Krankenkassengruppen" />
+          <Tab label="Kategorien" />
+          <Tab label="Spezialisierungen" />
+          <Tab label="ICD-Codes" />
+          <Tab label="Diagnosegruppen" />
+          <Tab label="Abrechnungszyklen" />
+          <Tab label="Zuschläge" />
+          <Tab label="Notfallkontakte" />
+          <Tab label="Praxis-Einstellungen" />
+          <Tab label="Kalender-Einstellungen" />
+          <Tab label="Bundesländer" />
+          <Tab label="Feiertage" />
+          <Tab label="Arbeitszeiten" />
+          <Tab label="Praxen" />
+        </Tabs>
       </Paper>
+
+      {renderActionButtons()}
+
+      <Box sx={{ height: 400, width: '100%' }}>
+        <DataGrid
+          rows={getValidRows(activeTab)}
+          columns={getValidColumns(activeTab)}
+          pageSize={5}
+          rowsPerPageOptions={[5, 10, 20]}
+          checkboxSelection
+          disableSelectionOnClick
+          onSelectionModelChange={(newSelection) => {
+            setSelectedRows(newSelection);
+          }}
+          components={{
+            Toolbar: GridToolbar,
+          }}
+        />
+      </Box>
     </Box>
   );
 }

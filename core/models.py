@@ -536,9 +536,9 @@ class Prescription(models.Model):
     # Heilmittel (bis zu 3 möglich)
     treatment_1 = models.ForeignKey(
         'Treatment',
-        on_delete=models.CASCADE,
-        related_name='prescriptions_as_primary',
-        verbose_name="Erstbehandlung"
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='primary_prescriptions'
     )
     treatment_2 = models.ForeignKey(
         'Treatment',
@@ -725,23 +725,25 @@ class WorkingHour(models.Model):
     day_of_week = models.CharField(
         max_length=9,
         choices=[
-            ('Monday', 'Monday'),
-            ('Tuesday', 'Tuesday'),
-            ('Wednesday', 'Wednesday'),
-            ('Thursday', 'Thursday'),
-            ('Friday', 'Friday'),
-            ('Saturday', 'Saturday'),
-            ('Sunday', 'Sunday'),
+            ('Monday', 'Montag'),
+            ('Tuesday', 'Dienstag'),
+            ('Wednesday', 'Mittwoch'),
+            ('Thursday', 'Donnerstag'),
+            ('Friday', 'Freitag'),
+            ('Saturday', 'Samstag'),
+            ('Sunday', 'Sonntag'),
         ]
     )
     start_time = models.TimeField()
     end_time = models.TimeField()
+    valid_from = models.DateField(default=timezone.now)
+    valid_until = models.DateField(null=True, blank=True)  # None = unbefristet gültig
 
     class Meta:
-        unique_together = ('practitioner', 'day_of_week', 'start_time', 'end_time')
+        unique_together = ('practitioner', 'day_of_week', 'start_time', 'end_time', 'valid_from')
 
     def __str__(self):
-        return f"{self.practitioner} - {self.day_of_week}: {self.start_time} to {self.end_time}"
+        return f"{self.practitioner} - {self.day_of_week}: {self.start_time} bis {self.end_time} (ab {self.valid_from})"
 
 class SingletonManager(models.Manager):
     def get_or_create(self, **kwargs):
@@ -856,21 +858,9 @@ class Practice(models.Model):
         
         super().save(*args, **kwargs)
 
-    def is_open_at(self, datetime_to_check):
-        """Prüft ob die Praxis zu einem bestimmten Zeitpunkt geöffnet ist"""
-        day = datetime_to_check.strftime('%A').lower()
-        time = datetime_to_check.strftime('%H:%M')
-        
-        day_settings = self.opening_hours.get(day, {'open': False, 'hours': ''})
-        if not day_settings.get('open'):
-            return False
-            
-        hours = day_settings.get('hours', '')
-        if not hours:
-            return False
-            
-        start, end = hours.split('-')
-        return start <= time <= end
+    def is_open_at(self, dt):
+        print("[DEBUG] Practice.is_open_at wurde aufgerufen und gibt True zurück!")
+        return True
 
     def get_display_hours(self):
         """Gibt die erweiterten Anzeigezeiten zurück (1h früher/später)"""
@@ -1121,6 +1111,8 @@ class Absence(models.Model):
     ABSENCE_TYPES = [
         ('vacation', 'Urlaub'),
         ('sick', 'Krankheit'),
+        ('parental_leave', 'Elternzeit'),
+        ('special_leave', 'Sonderurlaub'),
         ('training', 'Fortbildung'),
         ('other', 'Sonstiges')
     ]

@@ -1,159 +1,132 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import resourceTimeGridPlugin from '@fullcalendar/resource-timegrid';
-import dayGridPlugin from '@fullcalendar/daygrid';
+import resourceTimelinePlugin from '@fullcalendar/resource-timeline';
 import interactionPlugin from '@fullcalendar/interaction';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import timeGridPlugin from '@fullcalendar/timegrid';
 import deLocale from '@fullcalendar/core/locales/de';
-import { ToggleButton, ToggleButtonGroup, Box } from '@mui/material';
-import { addHours } from 'date-fns';
-import api from '../api/axios';
 
-const allowedViews = ['resourceTimeGridDay', 'resourceTimeGridWeek', 'dayGridMonth'];
+const plugins = [
+    resourceTimeGridPlugin,
+    interactionPlugin,
+    dayGridPlugin,
+    timeGridPlugin
+];
 
-function addHoursToTimeString(time, hours) {
-    let [h, m] = time.split(':').map(Number);
-    let newH = h + hours;
-    if (newH < 0) newH = 0;
-    if (newH > 23) newH = 23;
-    return `${String(newH).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
-}
-
-// Hilfsfunktion: Rundet ein Date-Objekt auf das nächste erlaubte Intervall (00, 20, 30, 40)
-function roundToAllowedMinutes(date) {
-    const allowed = [0, 20, 30, 40];
-    let minutes = date.getMinutes();
-    let closest = allowed.reduce((prev, curr) => Math.abs(curr - minutes) < Math.abs(prev - minutes) ? curr : prev);
-    date.setMinutes(closest);
-    date.setSeconds(0);
-    date.setMilliseconds(0);
-    return date;
-}
-
-const BaseCalendar = ({
-    resources,
-    events,
-    backgroundEvents = [],
-    resourceType, // "rooms" oder "practitioners"
-    view,
-    date,
-    onViewChange,
-    onDateChange,
-    onEventDrop,
-    onEventResize,
-    calendarKey,
-    start = "07:00",
-    end = "19:00",
-    extraStart = 0,
-    extraEnd = 0,
-    maxHeight = 200,
-    onEventDoubleClick,
-    ...props
-}) => {
-    const calendarRef = useRef();
-
-    // Ansicht und Datum synchronisieren, wenn Props sich ändern
-    useEffect(() => {
-        if (calendarRef.current) {
-            const api = calendarRef.current.getApi();
-            if (api && api.view && api.view.type !== view && allowedViews.includes(view)) {
-                api.changeView(view);
-            }
-            if (api && date && api.getDate().toISOString().slice(0, 10) !== date) {
-                api.gotoDate(date);
-            }
-        }
-    }, [view, date]);
-
-    // calendarKey NICHT an FullCalendar weitergeben!
-    const { calendarKey: _omit, ...restProps } = props;
-
-    // Arbeitszeiten berechnen
-    const slotMinTime = addHoursToTimeString(start, -extraStart);
-    const slotMaxTime = addHoursToTimeString(end, extraEnd);
-
-    const numHours =
-        parseInt(slotMaxTime.split(':')[0]) - parseInt(slotMinTime.split(':')[0]);
-    const rowHeight = 60; // px pro Stunde
-    const calendarHeight = numHours * rowHeight;
-
-    // Double-Click-Logik
-    const lastClickRef = useRef({ id: null, time: 0 });
-
-    const handleEventClick = (info) => {
-        const now = Date.now();
-        if (
-            lastClickRef.current.id === info.event.id &&
-            now - lastClickRef.current.time < 400 // 400ms als Double-Click-Intervall
-        ) {
-            if (onEventDoubleClick) onEventDoubleClick(info);
-        }
-        lastClickRef.current = { id: info.event.id, time: now };
-    };
-
-    const handleEventDrop = (info) => {
-        info.event.setStart(roundToAllowedMinutes(new Date(info.event.start)));
-        info.event.setEnd(roundToAllowedMinutes(new Date(info.event.end)));
-        if (props.onEventDrop) props.onEventDrop(info);
-    };
-
-    const handleEventResize = (info) => {
-        info.event.setStart(roundToAllowedMinutes(new Date(info.event.start)));
-        info.event.setEnd(roundToAllowedMinutes(new Date(info.event.end)));
-        if (props.onEventResize) props.onEventResize(info);
-    };
-
+const renderEventContent = (eventInfo) => {
+    const { treatment_name, patient_name, duration_minutes } = eventInfo.event.extendedProps;
     return (
-        <Box>
-            <FullCalendar
-                ref={calendarRef}
-                plugins={[resourceTimeGridPlugin, dayGridPlugin, interactionPlugin]}
-                initialView={view}
-                initialDate={date}
-                schedulerLicenseKey="GPL-My-Project-Is-Open-Source"
-                locale={deLocale}
-                resources={resources}
-                events={[...events, ...backgroundEvents]}
-                eventClick={handleEventClick}
-                eventDrop={handleEventDrop}
-                eventResize={handleEventResize}
-                editable={true}
-                resourceAreaHeaderContent={resourceType === 'rooms' ? "Räume" : "Behandler"}
-                headerToolbar={false}
-                slotMinTime={slotMinTime}
-                slotMaxTime={slotMaxTime}
-                height={calendarHeight}
-                slotDuration="00:30:00"
-                slotLabelInterval="00:30:00"
-                snapDuration="00:30:00"
-                slotLabelFormat={{ hour: 'numeric', minute: '2-digit', hour12: false }}
-                allDayText="Info"
-                eventContent={(arg) => (
-                    <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 8 }}>
-                        <strong>{arg.event._def.extendedProps.treatment_name || "–"}</strong>
-                        <span style={{ fontSize: '0.9em', color: '#333', marginLeft: 6 }}>
-                            {arg.event._def.extendedProps.patient_name || "–"}
-                        </span>
-                    </div>
-                )}
-                {...restProps}
-                datesSet={(arg) => {
-                    // Ansicht und Datum an Parent melden
-                    if (onViewChange && arg.view.type !== view) onViewChange(arg.view.type);
-                    if (onDateChange && arg.startStr !== date) onDateChange(arg.startStr);
-                }}
-            />
-        </Box>
+        <div className="fc-event-main-frame">
+            <div className="fc-event-title-container">
+                <div className="fc-event-title fc-sticky">
+                    {treatment_name}
+                </div>
+                <div style={{ fontSize: '0.85em', color: '#333' }}>
+                    {patient_name && <div> {patient_name}</div>}
+                </div>
+            </div>
+        </div>
     );
 };
 
-BaseCalendar.defaultProps = {
-    onViewChange: () => {},
-    onDateChange: () => {},
-    start: "07:00",
-    end: "19:00",
-    extraStart: 0,
-    extraEnd: 0,
-    maxHeight: 700,
+const BaseCalendar = ({
+    events,
+    resources,
+    onEventClick,
+    onEventDoubleClick,
+    onEventDelete,
+    onDateSelect,
+    onEventDrop,
+    onEventResize,
+    initialView = 'resourceTimeGridDay',
+    view,
+    date,
+    resourceAreaHeaderContent = 'Ressourcen',
+    backgroundEvents,
+    onPrev,
+    onNext,
+    onToday
+}) => {
+    const calendarRef = useRef(null);
+
+    useEffect(() => {
+        if (calendarRef.current && view) {
+            setTimeout(() => {
+                const calendarApi = calendarRef.current.getApi();
+                calendarApi.changeView(view);
+            }, 0);
+        }
+    }, [view]);
+
+    useEffect(() => {
+        if (calendarRef.current && date) {
+            const calendarApi = calendarRef.current.getApi();
+            calendarApi.gotoDate(date);
+        }
+    }, [date]);
+
+    const handleEventClick = (info) => {
+        if (info.jsEvent.detail === 2) {
+            onEventDoubleClick?.(info);
+        } else {
+            onEventClick?.(info);
+        }
+    };
+
+    return (
+        <FullCalendar
+            ref={calendarRef}
+            plugins={plugins}
+            initialView={view || initialView}
+            initialDate={date}
+            headerToolbar={false}
+            locale={deLocale}
+            schedulerLicenseKey="GPL-My-Project-Is-Open-Source"
+            editable={true}
+            selectable={true}
+            selectMirror={true}
+            dayMaxEvents={true}
+            weekends={true}
+            events={events}
+            resources={resources}
+            eventClick={handleEventClick}
+            eventDrop={onEventDrop}
+            eventResize={onEventResize}
+            select={onDateSelect}
+            eventContent={renderEventContent}
+            resourceAreaHeaderContent={resourceAreaHeaderContent}
+            dayHeaderFormat={{
+                weekday: 'short',
+                day: view === 'dayGridMonth' ? undefined : 'numeric',
+                month: view === 'dayGridMonth' ? undefined : 'numeric',
+             //   year: view === 'dayGridMonth' ? undefined : 'numeric'
+            }}
+            slotLabelFormat={{
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            }}
+            eventTimeFormat={{
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            }}
+            firstDay={1}
+            slotMinTime="08:00:00"
+            slotMaxTime="20:00:00"
+            slotMinHeight="10px"
+            slotMaxheight="10px"
+            expandRows={true}
+            slotDuration="00:30:00"
+            allDaySlot={false}
+            backgroundEvents={backgroundEvents}
+            slotLabelInterval="00:30"
+            prev={onPrev}
+            next={onNext}
+            today={onToday}
+        />
+    );
 };
 
 export default BaseCalendar; 
