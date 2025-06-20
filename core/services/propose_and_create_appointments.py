@@ -19,6 +19,14 @@ def propose_and_create_appointments(prescription, interval_days, room, practitio
     :param start_time: Startzeit der Termine.
     :return: Liste der angelegten Termine.
     """
+    # Validierung der Eingabeparameter
+    if not prescription:
+        raise ValidationError("Es muss ein gültiges Rezept angegeben werden.")
+    if not prescription.patient:
+        raise ValidationError("Das Rezept muss einem Patienten zugeordnet sein.")
+    if not prescription.patient_insurance:
+        raise ValidationError("Das Rezept muss einer Krankenkasse zugeordnet sein.")
+
     appointments = []
     if start_date is None:
         start_date = prescription.prescription_date
@@ -51,7 +59,7 @@ def propose_and_create_appointments(prescription, interval_days, room, practitio
         if not is_practitioner_available(practitioner, appointment_datetime):
             raise ValidationError(f"Der Behandler ist am {appointment_date} nicht verfügbar.")
 
-        # Termin erstellen
+        # Termin erstellen mit allen notwendigen Verknüpfungen
         appointment = Appointment(
             prescription=prescription,
             patient=prescription.patient,
@@ -60,10 +68,16 @@ def propose_and_create_appointments(prescription, interval_days, room, practitio
             treatment=treatment,
             appointment_date=appointment_datetime,
             duration_minutes=treatment.duration_minutes,
-            status='planned'
+            status='planned',
+            patient_insurance=prescription.patient_insurance  # Wichtig: Krankenkasse aus der Prescription übernehmen
         )
-        appointment.save()
-        appointments.append(appointment)
+        
+        try:
+            appointment.full_clean()  # Validiere das Appointment-Objekt
+            appointment.save()
+            appointments.append(appointment)
+        except ValidationError as e:
+            raise ValidationError(f"Fehler beim Erstellen des Termins: {str(e)}")
 
     return appointments
 
@@ -76,13 +90,25 @@ def is_within_practice_hours(appointment_datetime):
     return practice.is_open_at(appointment_datetime)
 
 def is_room_available(room, appointment_datetime):
+    """
+    Prüft, ob der Raum zum angegebenen Zeitpunkt verfügbar ist.
+    """
+    # TODO: Implementiere die tatsächliche Verfügbarkeitsprüfung
     print("[DEBUG] is_room_available wurde aufgerufen und gibt True zurück!")
     return True
 
 def is_practitioner_available(practitioner, appointment_datetime):
+    """
+    Prüft, ob der Behandler zum angegebenen Zeitpunkt verfügbar ist.
+    """
+    # TODO: Implementiere die tatsächliche Verfügbarkeitsprüfung
     print("[DEBUG] is_practitioner_available wurde aufgerufen und gibt True zurück!")
     return True
 
 def is_open_at(self, dt):
+    """
+    Prüft, ob die Praxis zum angegebenen Zeitpunkt geöffnet ist.
+    """
+    # TODO: Implementiere die tatsächliche Öffnungszeitenprüfung
     print("[DEBUG] is_open_at wurde aufgerufen und gibt True zurück!")
     return True

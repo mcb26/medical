@@ -18,7 +18,7 @@ from .models import (
     EmergencyContact,
     Doctor,
     Room,
-    Practitioner,
+    Practitioner, 
     Specialization,
     PracticeSettings,
     Category,
@@ -27,12 +27,11 @@ from .models import (
     BillingCycle,
     DiagnosisGroup,
     Prescription,
-    LocalHoliday,
     WorkingHour,
     Practice,
     BillingItem,
     Raetsel,
-    Absence
+    Absence,
 )
 
 User = get_user_model()
@@ -115,21 +114,28 @@ class SpecializationSerializer(serializers.ModelSerializer):
         
 class DoctorSerializer(serializers.ModelSerializer):
     specializations = SpecializationSerializer(many=True)  # Handle multiple specializations
-
+    
     class Meta:
         model = Doctor
         fields = '__all__'
 
     def create(self, validated_data):
-        specializations_data = validated_data.pop('specializations')
+        specializations_data = validated_data.pop('specializations', [])
         doctor = Doctor.objects.create(**validated_data)
         doctor.specializations.set(specializations_data)
         return doctor
 
+class WorkingHourSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WorkingHour
+        fields = '__all__'
+
 class PractitionerSerializer(serializers.ModelSerializer):
+    working_hours = WorkingHourSerializer(many=True, read_only=True)
+    
     class Meta:
         model = Practitioner
-        fields = ['id', 'first_name', 'last_name', 'is_active']
+        fields = ['id', 'first_name', 'last_name', 'is_active', 'working_hours']
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -351,11 +357,6 @@ class PrescriptionSerializer(serializers.ModelSerializer):
             print(f"Error in get_diagnosis_code_display: {str(e)}")
             return ""
 
-class WorkingHourSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = WorkingHour
-        fields = '__all__'
-
 class TreatmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Treatment
@@ -369,11 +370,6 @@ class SurchargeSerializer(serializers.ModelSerializer):
 class DiagnosisGroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = DiagnosisGroup
-        fields = '__all__'
-
-class LocalHolidaySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = LocalHoliday
         fields = '__all__'
 
 class PracticeSerializer(serializers.ModelSerializer):

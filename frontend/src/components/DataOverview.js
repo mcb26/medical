@@ -340,7 +340,7 @@ function DataOverview() {
       billingCycles: '/billing-cycles/new',
       surcharges: '/surcharges/new',
       emergencyContacts: '/emergency-contacts/new',
-      practiceSettings: '/practice-settings/new',
+      practiceSettings: '/practice-settings',
       calendarSettings: '/settings/new',
       bundeslaender: '/bundesland/new',
       localHolidays: '/local-holidays/new',

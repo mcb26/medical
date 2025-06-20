@@ -12,7 +12,8 @@ const RoomsCalendar = ({
     resources,
     onPrev,
     onNext,
-    onToday 
+    onToday,
+    openingHours
 }) => {
     const [rooms, setRooms] = useState([]);
     const [events, setEvents] = useState([]);
@@ -120,10 +121,11 @@ const RoomsCalendar = ({
             onEventResize={handleEventResize}
             onEventDoubleClick={handleEventDoubleClick}
             resourceAreaHeaderContent="Räume"
-            dayHeaderFormat="dddd, dd.MM.yyyy"
+            columnHeaderFormat={{ weekday: 'short', month: 'numeric', day: 'numeric' }}
             onPrev={onPrev}
             onNext={onNext}
             onToday={onToday}
+            openingHours={openingHours}
         />
     );
 };

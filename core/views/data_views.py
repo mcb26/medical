@@ -1,11 +1,10 @@
 from rest_framework import viewsets
 from rest_framework.response import Response
-from ..models import DiagnosisGroup, Surcharge, Bundesland, LocalHoliday
+from ..models import DiagnosisGroup, Surcharge, Bundesland
 from ..serializers import (
     DiagnosisGroupSerializer, 
     SurchargeSerializer,
-    BundeslandSerializer,
-    LocalHolidaySerializer
+    BundeslandSerializer
 )
 
 class DiagnosisGroupViewSet(viewsets.ModelViewSet):
@@ -18,8 +17,4 @@ class SurchargeViewSet(viewsets.ModelViewSet):
 
 class BundeslandViewSet(viewsets.ModelViewSet):
     queryset = Bundesland.objects.all()
-    serializer_class = BundeslandSerializer
-
-class LocalHolidayViewSet(viewsets.ModelViewSet):
-    queryset = LocalHoliday.objects.all()
-    serializer_class = LocalHolidaySerializer 
+    serializer_class = BundeslandSerializer 

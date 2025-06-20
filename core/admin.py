@@ -26,7 +26,6 @@ from .models import (
     PracticeSettings,
     CalendarSettings,
     Bundesland,
-    LocalHoliday,
     WorkingHour,
     Practice,
     Absence
@@ -457,6 +456,5 @@ admin.site.register(EmergencyContact)
 admin.site.register(PracticeSettings)
 admin.site.register(CalendarSettings)
 admin.site.register(Bundesland)
-admin.site.register(LocalHoliday)
 admin.site.register(WorkingHour)
 admin.site.register(Practice)

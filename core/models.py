@@ -700,24 +700,6 @@ class Appointment(models.Model):
         verbose_name = "Termin"
         verbose_name_plural = "Termine"
 
-# LocalHoliday Model
-class LocalHoliday(models.Model):
-    bundesland = models.ForeignKey(Bundesland, on_delete=models.CASCADE)
-    holiday_name = models.CharField(max_length=255)
-    date = models.DateField()
-    is_recurring = models.BooleanField(default=True, help_text="Jährlich wiederkehrender Feiertag")
-    description = models.TextField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name = "Feiertag"
-        verbose_name_plural = "Feiertage"
-        ordering = ['date']
-        unique_together = ['bundesland', 'date']  # Verhindert doppelte Einträge
-
-    def __str__(self):
-        return f"{self.holiday_name} ({self.bundesland.abbreviation}) - {self.date}"
 
 # WorkingHour Model
 class WorkingHour(models.Model):

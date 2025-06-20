@@ -9,7 +9,7 @@ import {
   Alert,
   CircularProgress
 } from '@mui/material';
-import api from '../api/axios';
+import { login } from '../services/auth';
 
 function Login() {
   const navigate = useNavigate();
@@ -35,17 +35,22 @@ function Login() {
       setLoading(true);
       setError(null);
       
-      // Der korrekte Pfad ist jetzt /api/token/
-      const response = await api.post('token/', formData);
+      const success = await login(formData.username, formData.password);
       
-      localStorage.setItem('token', response.data.access);
-      
-      // Nach erfolgreichem Login zur ursprünglichen Seite zurückkehren
-      const from = location.state?.from?.pathname || '/';
-      navigate(from, { replace: true });
+      if (success) {
+        // Nach erfolgreichem Login zur ursprünglichen Seite zurückkehren
+        const from = location.state?.from?.pathname || '/';
+        navigate(from, { replace: true });
+      } else {
+        setError('Login fehlgeschlagen. Bitte überprüfen Sie Ihre Anmeldedaten.');
+      }
     } catch (error) {
       console.error('Login error:', error);
-      setError('Login fehlgeschlagen. Bitte überprüfen Sie Ihre Anmeldedaten.');
+      if (error.code === 'ERR_NETWORK') {
+        setError('Verbindungsfehler. Bitte überprüfen Sie Ihre Internetverbindung und stellen Sie sicher, dass der Server läuft.');
+      } else {
+        setError('Login fehlgeschlagen. Bitte überprüfen Sie Ihre Anmeldedaten.');
+      }
     } finally {
       setLoading(false);
     }

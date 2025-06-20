@@ -22,7 +22,8 @@ const login = async (username, password) => {
         return false;
     } catch (error) {
         console.error('Login error:', error.response?.data || error.message);
-        return false;
+        // Re-throw the error so the component can handle it
+        throw error;
     }
 };
 

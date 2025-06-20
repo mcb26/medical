@@ -327,18 +327,87 @@ const PracticeDetail = () => {
                                         required
                                     />
                                 </Grid>
+                                
+                                {/* Öffnungszeiten Übersicht */}
+                                <Grid item xs={12}>
+                                    <Paper sx={{ p: 2, mt: 2, backgroundColor: '#f8f9fa' }}>
+                                        <Typography variant="h6" gutterBottom>
+                                            Aktuelle Öffnungszeiten
+                                        </Typography>
+                                        <Grid container spacing={1}>
+                                            {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => {
+                                                const weekdays = {
+                                                    monday: 'Montag',
+                                                    tuesday: 'Dienstag',
+                                                    wednesday: 'Mittwoch',
+                                                    thursday: 'Donnerstag',
+                                                    friday: 'Freitag',
+                                                    saturday: 'Samstag',
+                                                    sunday: 'Sonntag'
+                                                };
+                                                
+                                                const daySettings = practice.opening_hours[day];
+                                                const isOpen = daySettings?.open;
+                                                const startTime = daySettings?.start || '';
+                                                const endTime = daySettings?.end || '';
+                                                const breakStart = daySettings?.break_start || '';
+                                                const breakEnd = daySettings?.break_end || '';
+                                                
+                                                return (
+                                                    <Grid item xs={12} sm={6} md={4} key={day}>
+                                                        <Box sx={{ 
+                                                            p: 1, 
+                                                            border: '1px solid #ddd', 
+                                                            borderRadius: 1,
+                                                            backgroundColor: isOpen ? '#e8f5e8' : '#f5f5f5'
+                                                        }}>
+                                                            <Typography variant="subtitle2" fontWeight="bold">
+                                                                {weekdays[day]}
+                                                            </Typography>
+                                                            {isOpen ? (
+                                                                <Typography variant="body2">
+                                                                    {startTime} - {endTime}
+                                                                    {breakStart && breakEnd && (
+                                                                        <span style={{ display: 'block', fontSize: '0.8em', color: '#666' }}>
+                                                                            Pause: {breakStart} - {breakEnd}
+                                                                        </span>
+                                                                    )}
+                                                                </Typography>
+                                                            ) : (
+                                                                <Typography variant="body2" color="text.secondary">
+                                                                    Geschlossen
+                                                                </Typography>
+                                                            )}
+                                                        </Box>
+                                                    </Grid>
+                                                );
+                                            })}
+                                        </Grid>
+                                    </Paper>
+                                </Grid>
                             </Grid>
                         </TabPanel>
 
                         <TabPanel value={activeTab} index={1}>
                             <Grid container spacing={2}>
-                                {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => (
+                                {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => {
+                                    const weekdays = {
+                                        monday: 'Montag',
+                                        tuesday: 'Dienstag',
+                                        wednesday: 'Mittwoch',
+                                        thursday: 'Donnerstag',
+                                        friday: 'Freitag',
+                                        saturday: 'Samstag',
+                                        sunday: 'Sonntag'
+                                    };
+                                    
+                                    return (
                                     <Grid item xs={12} key={day}>
-                                        <Paper sx={{ p: 2 }}>
+                                            <Paper sx={{ p: 2, backgroundColor: '#f5f5f5' }}>
                                             <Grid container spacing={2} alignItems="center">
                                                 <Grid item xs={12} md={2}>
-                                                    <Typography variant="subtitle1">
-                                                        {day.charAt(0).toUpperCase() + day.slice(1)}
+                                                        <Typography variant="subtitle1" fontWeight="bold">
+                                                            {weekdays[day]}
                                                     </Typography>
                                                 </Grid>
                                                 <Grid item xs={12} md={2}>
@@ -415,7 +484,8 @@ const PracticeDetail = () => {
                                             </Grid>
                                         </Paper>
                                     </Grid>
-                                ))}
+                                    );
+                                })}
                             </Grid>
                         </TabPanel>
 

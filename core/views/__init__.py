@@ -21,8 +21,7 @@ from .user_views import UserViewSet
 from .data_views import (
     DiagnosisGroupViewSet,
     SurchargeViewSet,
-    BundeslandViewSet,
-    LocalHolidayViewSet
+    BundeslandViewSet
 )
 
 __all__ = [
@@ -30,7 +29,6 @@ __all__ = [
     'DiagnosisGroupViewSet',
     'SurchargeViewSet',
     'BundeslandViewSet',
-    'LocalHolidayViewSet',
     'PracticeViewSet',
     'create_appointment_series'
 ]

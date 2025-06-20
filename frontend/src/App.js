@@ -49,8 +49,6 @@ import SurchargeDetail from './components/SurchargeDetail';
 import EmergencyContactDetail from './components/EmergencyContactDetail';
 import PracticeSettingsDetail from './components/PracticeSettingsDetail';
 import CalendarSettingsDetail from './components/CalendarSettingsDetail';
-import BundeslandDetail from './components/BundeslandDetail';
-import LocalHolidayDetail from './components/LocalHolidayDetail';
 import WorkingHourDetail from './components/WorkingHourDetail';
 import CategoryNew from './components/CategoryNew';
 import SpecializationNew from './components/SpecializationNew';
@@ -59,7 +57,6 @@ import DiagnosisGroupNew from './components/DiagnosisGroupNew';
 import SurchargeNew from './components/SurchargeNew';
 import EmergencyContactNew from './components/EmergencyContactNew';
 import BundeslandNew from './components/BundeslandNew';
-import LocalHolidayNew from './components/LocalHolidayNew';
 import WorkingHourNew from './components/WorkingHourNew';
 import CategoryEdit from './components/CategoryEdit';
 import SpecializationEdit from './components/SpecializationEdit';
@@ -68,7 +65,6 @@ import DiagnosisGroupEdit from './components/DiagnosisGroupEdit';
 import SurchargeEdit from './components/SurchargeEdit';
 import EmergencyContactEdit from './components/EmergencyContactEdit';
 import BundeslandEdit from './components/BundeslandEdit';
-import LocalHolidayEdit from './components/LocalHolidayEdit';
 import WorkingHourEdit from './components/WorkingHourEdit';
 import DoctorNew from './components/DoctorNew';
 import DoctorDetail from './components/DoctorDetail';
@@ -126,10 +122,8 @@ function App() {
           <Route path="/billing-cycles/:id" element={<BillingCycleDetail />} />
           <Route path="/surcharges/:id" element={<SurchargeDetail />} />
           <Route path="/emergency-contacts/:id" element={<EmergencyContactDetail />} />
-          <Route path="/practice-settings/:id" element={<PracticeSettingsDetail />} />
+          <Route path="/practice-settings" element={<PracticeSettingsDetail />} />
           <Route path="/calendar-settings/:id" element={<CalendarSettingsDetail />} />
-          <Route path="/bundesland/:id" element={<BundeslandDetail />} />
-          <Route path="/local-holidays/:id" element={<LocalHolidayDetail />} />
           <Route path="/working-hours/:id" element={<WorkingHourDetail />} />
           <Route path="/categories/new" element={<CategoryNew />} />
           <Route path="/specializations/new" element={<SpecializationNew />} />
@@ -138,7 +132,6 @@ function App() {
           <Route path="/surcharges/new" element={<SurchargeNew />} />
           <Route path="/emergency-contacts/new" element={<EmergencyContactNew />} />
           <Route path="/bundesland/new" element={<BundeslandNew />} />
-          <Route path="/local-holidays/new" element={<LocalHolidayNew />} />
           <Route path="/working-hours/new" element={<WorkingHourNew />} />
           <Route path="/categories/:id/edit" element={<CategoryEdit />} />
           <Route path="/specializations/:id/edit" element={<SpecializationEdit />} />
@@ -147,7 +140,6 @@ function App() {
           <Route path="/surcharges/:id/edit" element={<SurchargeEdit />} />
           <Route path="/emergency-contacts/:id/edit" element={<EmergencyContactEdit />} />
           <Route path="/bundesland/:id/edit" element={<BundeslandEdit />} />
-          <Route path="/local-holidays/:id/edit" element={<LocalHolidayEdit />} />
           <Route path="/working-hours/:id/edit" element={<WorkingHourEdit />} />
           <Route path="/patients/:id/edit" element={<PatientEdit />} />
         </Route>

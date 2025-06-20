@@ -69,12 +69,36 @@ REST_FRAMEWORK = {
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "https://localhost:3000"
+    "https://localhost:3000",
+    "http://192.168.2.125:3000",
+    "https://192.168.2.125:3000"
 ]
 
 CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOW_ALL_ORIGINS = False
+
+# Zusätzliche CORS-Einstellungen für Token-Endpunkte
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 ROOT_URLCONF = 'medical.urls'
 
@@ -156,7 +180,9 @@ AUTHENTICATION_BACKENDS = [
 
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
-    "https://localhost:3000"
+    "https://localhost:3000",
+    "http://192.168.2.125:3000",
+    "https://192.168.2.125:3000"
 ]
 
 SIMPLE_JWT = {
@@ -204,10 +230,3 @@ CSRF_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_SECURE = False
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
-
-# Weitere relevante Einstellungen
-CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "https://localhost:3000",
-]

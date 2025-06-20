@@ -88,7 +88,7 @@ function PrescriptionEdit() {
           api.get('/patients/'),
           api.get('/doctors/'),
           api.get('/treatments/'),
-          api.get('/icd-codes/')
+          api.get('/icdcodes/')
         ]);
 
         setFormData(prescriptionRes.data);

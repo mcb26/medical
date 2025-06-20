@@ -53,11 +53,25 @@ const Calendar = () => {
         return stored ? JSON.parse(stored) : [];
     });
     const [resources, setResources] = useState([]);
+    const [practiceSettings, setPracticeSettings] = useState(null);
 
     // Speichere Modus im localStorage wenn er sich ändert
     useEffect(() => {
         localStorage.setItem('calendar_mode', mode);
     }, [mode]);
+
+    // Lade Praxiseinstellungen beim Start
+    useEffect(() => {
+        const fetchPracticeSettings = async () => {
+            try {
+                const response = await api.get('/practice/instance/');
+                setPracticeSettings(response.data);
+            } catch (error) {
+                console.error('Fehler beim Laden der Praxiseinstellungen:', error);
+            }
+        };
+        fetchPracticeSettings();
+    }, []);
 
     // Lade Ressourcen (Räume oder Behandler) beim Start und wenn sich der Modus ändert
     useEffect(() => {
@@ -323,6 +337,7 @@ const Calendar = () => {
                     onPrev={handlePrev}
                     onNext={handleNext}
                     onToday={handleToday}
+                    openingHours={practiceSettings?.opening_hours}
                 />
             ) : (
                 <PractitionerCalendar
@@ -335,6 +350,7 @@ const Calendar = () => {
                     onPrev={handlePrev}
                     onNext={handleNext}
                     onToday={handleToday}
+                    openingHours={practiceSettings?.opening_hours}
                 />
             )}
         </Box>

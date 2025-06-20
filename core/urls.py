@@ -13,7 +13,7 @@ from .views.views import (
     AppointmentStatsView, DashboardStatsView,
     UserDetailView, PracticeViewSet, BundeslandViewSet, WorkingHourViewSet,
     export_billing_cycle,
-    DiagnosisGroupViewSet, SurchargeViewSet, LocalHolidayViewSet,
+    DiagnosisGroupViewSet, SurchargeViewSet,
     create_appointment_series,
     AbsenceViewSet
 )
@@ -109,8 +109,6 @@ urlpatterns = [
     path('bundeslaender/', BundeslandViewSet.as_view({'get': 'list'}), name='bundesland-list'),
     path('diagnosis-groups/', DiagnosisGroupViewSet.as_view({'get': 'list'})),
     path('surcharges/', SurchargeViewSet.as_view({'get': 'list'})),
-    path('local-holidays/', LocalHolidayViewSet.as_view({'get': 'list'}), name='local-holidays-list'),
-    path('local-holidays/<int:bundesland_id>/', LocalHolidayViewSet.as_view({'get': 'list'}), name='local-holidays-by-bundesland'),
     path('billing-cycles/<int:pk>/items/', 
          BillingCycleViewSet.as_view({'get': 'items'}), 
          name='billing-cycle-items'),

@@ -58,7 +58,6 @@ from ..models import (
     DiagnosisGroup,
     Prescription,
     Appointment,
-    LocalHoliday,
     WorkingHour,
     Practice,
     BillingItem
@@ -86,13 +85,11 @@ from ..serializers import (
     PrescriptionSerializer,
     AppointmentSerializer,
     AppointmentSeriesSerializer,
-    LocalHolidaySerializer,
     WorkingHourSerializer,
     PracticeSerializer,
     BillingItemSerializer
 )
 from core.appointment_validators import (
-    validate_holiday,
     validate_working_hours,
     validate_conflict_for_appointment
 )
@@ -861,10 +858,6 @@ def get_current_user(request):
 class DiagnosisGroupViewSet(viewsets.ModelViewSet):
     queryset = DiagnosisGroup.objects.all()
     serializer_class = DiagnosisGroupSerializer
-
-class LocalHolidayViewSet(viewsets.ModelViewSet):
-    queryset = LocalHoliday.objects.all()
-    serializer_class = LocalHolidaySerializer
 
 class AppointmentSeriesViewSet(viewsets.ViewSet):
     def preview(self, request):

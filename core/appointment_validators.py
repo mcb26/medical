@@ -8,24 +8,28 @@ def validate_holiday(appointment_date, bundesland):
     """
     Überprüft, ob ein Termin auf einen Feiertag fällt
     """
-    from core.models import LocalHoliday
+    # TODO: Implementiere Feiertagsprüfung wenn LocalHoliday Model verfügbar ist
+    # from core.models import LocalHoliday
     
-    check_date = appointment_date.date()
+    # check_date = appointment_date.date()
     
-    holiday = LocalHoliday.objects.filter(
-        bundesland=bundesland,
-        date=check_date
-    ).first()
+    # holiday = LocalHoliday.objects.filter(
+    #     bundesland=bundesland,
+    #     date=check_date
+    # ).first()
     
-    if holiday:
-        raise ValidationError(
-            f'Am {check_date} ist ein Feiertag ({holiday.holiday_name}) in {bundesland.name}. '
-            'An diesem Tag können keine Termine vergeben werden.'
-        )
+    # if holiday:
+    #     raise ValidationError(
+    #         f'Am {check_date} ist ein Feiertag ({holiday.holiday_name}) in {bundesland.name}. '
+    #         'An diesem Tag können keine Termine vergeben werden.'
+    #     )
+    
+    # Vorübergehend: Keine Feiertagsprüfung
+    pass
 
 def validate_appointment_conflicts(series):
     """Validates conflicts for a series of appointments."""
-    from core.models import Appointment
+    from core.models import Appointment, Practice
     conflicts = []
     treatment_duration = series.treatment.duration_minutes
 
