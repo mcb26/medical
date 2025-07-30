@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axios';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { TextField, Button, Box, MenuItem, Checkbox, FormControlLabel, Grid, Typography } from '@mui/material';
 
 function NewAppointment() {
@@ -25,10 +25,47 @@ function NewAppointment() {
   });
   const [roundStartTime, setRoundStartTime] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Verarbeite URL-Parameter beim Laden der Komponente
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    
+    if (searchParams.has('start') && searchParams.has('end')) {
+      const startDate = new Date(searchParams.get('start'));
+      const endDate = new Date(searchParams.get('end'));
+      
+      // Berechne die Dauer in Minuten
+      const durationMinutes = Math.round((endDate - startDate) / (1000 * 60));
+      
+      // Formatiere das Datum für das Datetime-Local-Input
+      const formattedDate = startDate.toISOString().slice(0, 16);
+      
+      setFormData(prev => ({
+        ...prev,
+        appointment_date: formattedDate,
+        duration_minutes: durationMinutes.toString()
+      }));
+      
+      // Setze Practitioner oder Room basierend auf resourceType
+      const resourceType = searchParams.get('resourceType');
+      if (resourceType === 'practitioner' && searchParams.has('practitioner')) {
+        setFormData(prev => ({
+          ...prev,
+          practitioner: searchParams.get('practitioner')
+        }));
+      } else if (resourceType === 'room' && searchParams.has('room')) {
+        setFormData(prev => ({
+          ...prev,
+          room: searchParams.get('room')
+        }));
+      }
+    }
+  }, [location.search]);
 
   const fetchData = async () => {
     try {

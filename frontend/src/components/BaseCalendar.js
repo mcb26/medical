@@ -164,7 +164,8 @@ const BaseCalendar = ({
     columnHeaderFormat,
     slotMinTime = '08:00:00',
     slotMaxTime = '20:00:00',
-    weekends = true // Default to true for now, will be overridden by prop
+    weekends = true, // Default to true for now, will be overridden by prop
+    resourceType = 'practitioners' // Neu: um zu unterscheiden ob Räume oder Behandler
 }) => {
     const calendarRef = useRef(null);
 
@@ -189,6 +190,29 @@ const BaseCalendar = ({
             onEventDoubleClick?.(info);
         } else {
             onEventClick?.(info);
+        }
+    };
+
+    // Handler für Datums-/Zeitauswahl (Doppelklick auf Zeitpunkt)
+    const handleDateSelect = (selectInfo) => {
+        if (onDateSelect) {
+            // Extrahiere die ausgewählte Ressource
+            const selectedResource = selectInfo.resource;
+            const startDate = selectInfo.start;
+            const endDate = selectInfo.end;
+            
+            // Erstelle ein Objekt mit den ausgewählten Daten
+            const selectionData = {
+                start: startDate,
+                end: endDate,
+                resource: selectedResource,
+                resourceType: resourceType,
+                // Extrahiere die Ressourcen-ID (entferne Präfix wie "practitioner-" oder "room-")
+                resourceId: selectedResource ? selectedResource.id.replace(/^(practitioner-|room-)/, '') : null,
+                resourceTitle: selectedResource ? selectedResource.title : null
+            };
+            
+            onDateSelect(selectionData);
         }
     };
 
@@ -231,7 +255,7 @@ const BaseCalendar = ({
                 eventClick={handleEventClick}
                 eventDrop={onEventDrop}
                 eventResize={onEventResize}
-                select={onDateSelect}
+                select={handleDateSelect}
                 eventContent={renderEventContent}
                 resourceAreaHeaderContent={resourceAreaHeaderContent}
                 dayHeaderFormat={dayHeaderFormat !== undefined ? dayHeaderFormat : {

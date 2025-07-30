@@ -448,6 +448,20 @@ const PractitionerCalendar = ({
         });
     };
 
+    // Handler für Datums-/Zeitauswahl
+    const handleDateSelect = (selectionData) => {
+        // Erstelle URL-Parameter für das Termin-Erstellungsformular
+        const params = new URLSearchParams({
+            start: selectionData.start.toISOString(),
+            end: selectionData.end.toISOString(),
+            practitioner: selectionData.resourceId,
+            resourceType: 'practitioner'
+        });
+        
+        // Navigiere zum Termin-Erstellungsformular mit vorausgefüllten Daten
+        navigate(`/appointments/new?${params.toString()}`);
+    };
+
     return (
         <BaseCalendar
             resources={filteredPractitioners}
@@ -479,6 +493,7 @@ const PractitionerCalendar = ({
             onEventResize={handleEventResize}
             onEventDoubleClick={handleEventDoubleClick}
             onEventDelete={handleEventDelete}
+            onDateSelect={handleDateSelect}
             resourceAreaHeaderContent="Behandler"
             columnHeaderFormat={{ weekday: 'short', month: 'numeric', day: 'numeric' }}
             onPrev={onPrev}

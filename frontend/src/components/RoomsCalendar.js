@@ -95,6 +95,20 @@ const RoomsCalendar = ({
         navigate(`/appointments/${info.event.id}`);
     };
 
+    // Handler für Datums-/Zeitauswahl
+    const handleDateSelect = (selectionData) => {
+        // Erstelle URL-Parameter für das Termin-Erstellungsformular
+        const params = new URLSearchParams({
+            start: selectionData.start.toISOString(),
+            end: selectionData.end.toISOString(),
+            room: selectionData.resourceId,
+            resourceType: 'room'
+        });
+        
+        // Navigiere zum Termin-Erstellungsformular mit vorausgefüllten Daten
+        navigate(`/appointments/new?${params.toString()}`);
+    };
+
     return (
         <BaseCalendar
             resources={filteredRooms}
@@ -121,6 +135,7 @@ const RoomsCalendar = ({
             onEventDrop={handleEventDrop}
             onEventResize={handleEventResize}
             onEventDoubleClick={handleEventDoubleClick}
+            onDateSelect={handleDateSelect}
             resourceAreaHeaderContent="Räume"
             columnHeaderFormat={{ weekday: 'short', month: 'numeric', day: 'numeric' }}
             onPrev={onPrev}
