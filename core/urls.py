@@ -4,7 +4,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 # Korrigierter Import-Pfad für die Views
 from .views.views import (
-    UserViewSet, InsuranceProviderGroupViewSet, InsuranceProviderViewSet,
+    InsuranceProviderGroupViewSet, InsuranceProviderViewSet,
     PatientViewSet, PatientInsuranceViewSet, EmergencyContactViewSet, DoctorViewSet,
     PractitionerViewSet, SpecializationViewSet, RoomViewSet, PracticeSettingsViewSet,
     TreatmentViewSet, CategoryViewSet, AppointmentViewSet, BillingCycleViewSet,
@@ -17,6 +17,7 @@ from .views.views import (
     create_appointment_series,
     AbsenceViewSet
 )
+from .views.user_views import UserViewSet
 from .views.billing_views import (
     PatientInvoiceListView,
     PatientInvoiceDetailView,

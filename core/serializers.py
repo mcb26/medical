@@ -67,7 +67,11 @@ class UserSerializer(serializers.ModelSerializer):
             'default_practitioner',
             'date_joined',
             'last_login',
+            'is_active',
+            'is_staff',
+            'is_superuser',
         ]
+        read_only_fields = ['id', 'date_joined', 'last_login']
 
 
 
