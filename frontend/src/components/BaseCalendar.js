@@ -163,7 +163,8 @@ const BaseCalendar = ({
     dayHeaderFormat,
     columnHeaderFormat,
     slotMinTime = '08:00:00',
-    slotMaxTime = '20:00:00'
+    slotMaxTime = '20:00:00',
+    weekends = true // Default to true for now, will be overridden by prop
 }) => {
     const calendarRef = useRef(null);
 
@@ -224,7 +225,7 @@ const BaseCalendar = ({
                 selectable={true}
                 selectMirror={true}
                 dayMaxEvents={true}
-                weekends={true}
+                weekends={weekends !== undefined ? weekends : true}
                 events={allEvents}
                 resources={resources}
                 eventClick={handleEventClick}
@@ -239,7 +240,6 @@ const BaseCalendar = ({
                     month: view === 'dayGridMonth' ? undefined : 'numeric',
                  //   year: view === 'dayGridMonth' ? undefined : 'numeric'
                 }}
-                columnHeaderFormat={columnHeaderFormat}
                 slotLabelFormat={{
                     hour: '2-digit',
                     minute: '2-digit',
@@ -261,9 +261,6 @@ const BaseCalendar = ({
                 allDayText='Info'
                 backgroundEvents={backgroundEvents}
                 slotLabelInterval="00:15"
-                prev={onPrev}
-                next={onNext}
-                today={onToday}
             />
         </>
     );

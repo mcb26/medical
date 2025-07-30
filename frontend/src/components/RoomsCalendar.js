@@ -13,7 +13,8 @@ const RoomsCalendar = ({
     onPrev,
     onNext,
     onToday,
-    openingHours
+    openingHours,
+    showWeekends
 }) => {
     const [rooms, setRooms] = useState([]);
     const [events, setEvents] = useState([]);
@@ -126,6 +127,7 @@ const RoomsCalendar = ({
             onNext={onNext}
             onToday={onToday}
             openingHours={openingHours}
+            weekends={showWeekends}
         />
     );
 };

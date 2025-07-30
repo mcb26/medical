@@ -39,6 +39,11 @@ function getCurrentLabel(view, date) {
     return "";
 }
 
+const getInitialShowWeekends = () => {
+    const stored = localStorage.getItem('calendar_show_weekends');
+    return stored === null ? true : stored === 'true';
+};
+
 const Calendar = () => {
     const navigate = useNavigate();
     const [view, setView] = useState(getInitialView);
@@ -54,6 +59,7 @@ const Calendar = () => {
     });
     const [resources, setResources] = useState([]);
     const [practiceSettings, setPracticeSettings] = useState(null);
+    const [showWeekends, setShowWeekends] = useState(getInitialShowWeekends);
 
     // Speichere Modus im localStorage wenn er sich ändert
     useEffect(() => {
@@ -112,6 +118,10 @@ const Calendar = () => {
             localStorage.setItem(`selected_${mode}`, JSON.stringify(selectedResources));
         }
     }, [selectedResources, mode]);
+
+    useEffect(() => {
+        localStorage.setItem('calendar_show_weekends', showWeekends);
+    }, [showWeekends]);
 
     const handleResourceChange = (event) => {
         const {
@@ -271,6 +281,15 @@ const Calendar = () => {
                     </Select>
                 </FormControl>
 
+                {/* Wochenend-Anzeige Umschalter */}
+                <FormControl sx={{ minWidth: 150 }} size="small">
+                    <Checkbox
+                        checked={showWeekends}
+                        onChange={e => setShowWeekends(e.target.checked)}
+                    />
+                    <Typography variant="body2">Wochenenden anzeigen</Typography>
+                </FormControl>
+
                 {/* Termin anlegen Button */}
                 <Button
                     variant="contained"
@@ -338,6 +357,7 @@ const Calendar = () => {
                     onNext={handleNext}
                     onToday={handleToday}
                     openingHours={practiceSettings?.opening_hours}
+                    showWeekends={showWeekends}
                 />
             ) : (
                 <PractitionerCalendar
@@ -351,6 +371,7 @@ const Calendar = () => {
                     onNext={handleNext}
                     onToday={handleToday}
                     openingHours={practiceSettings?.opening_hours}
+                    showWeekends={showWeekends}
                 />
             )}
         </Box>

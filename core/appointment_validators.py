@@ -4,29 +4,6 @@ from django.db.models import Q, F, ExpressionWrapper, DurationField, DateTimeFie
 from django.utils.timezone import make_aware, is_naive
 from datetime import timezone
 
-def validate_holiday(appointment_date, bundesland):
-    """
-    Überprüft, ob ein Termin auf einen Feiertag fällt
-    """
-    # TODO: Implementiere Feiertagsprüfung wenn LocalHoliday Model verfügbar ist
-    # from core.models import LocalHoliday
-    
-    # check_date = appointment_date.date()
-    
-    # holiday = LocalHoliday.objects.filter(
-    #     bundesland=bundesland,
-    #     date=check_date
-    # ).first()
-    
-    # if holiday:
-    #     raise ValidationError(
-    #         f'Am {check_date} ist ein Feiertag ({holiday.holiday_name}) in {bundesland.name}. '
-    #         'An diesem Tag können keine Termine vergeben werden.'
-    #     )
-    
-    # Vorübergehend: Keine Feiertagsprüfung
-    pass
-
 def validate_appointment_conflicts(series):
     """Validates conflicts for a series of appointments."""
     from core.models import Appointment, Practice
@@ -41,22 +18,6 @@ def validate_appointment_conflicts(series):
             appointment_start_time = make_aware(appointment_start_time, timezone=timezone.utc)
 
         appointment_end_time = appointment_start_time + timedelta(minutes=treatment_duration)
-
-        # Überprüfe Feiertage
-        practice = Practice.objects.first()
-        if practice:
-            try:
-                validate_holiday(
-                    appointment_start_time, 
-                    practice.bundesland
-                )
-            except ValidationError as e:
-                conflicts.append({
-                    'session': i + 1,
-                    'date': appointment_start_time,
-                    'reason': str(e)
-                })
-                continue
 
         # Überprüfe Behandler-Konflikte
         practitioner_conflicts = Appointment.objects.filter(
@@ -100,9 +61,6 @@ def validate_conflict_for_appointment(appointment_date, duration_minutes, practi
     """Validates that there are no conflicting appointments."""
     from core.models import Appointment, Practice
     practice = Practice.objects.first()
-    
-    # Prüfe auf Feiertage
-    validate_holiday(appointment_date, practice.bundesland)
     
     end_time = appointment_date + timedelta(minutes=duration_minutes)
     

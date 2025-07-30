@@ -132,6 +132,8 @@ DATABASES = {
 }
 
 
+
+
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 
@@ -175,14 +177,19 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTHENTICATION_BACKENDS = [
-    'django.contrib.auth.backends.ModelBackend',
+    'django.contrib.auth.backends.ModelBackend'
 ]
 
 CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:3000",
-    "https://localhost:3000",
-    "http://192.168.2.125:3000",
-    "https://192.168.2.125:3000"
+    'http://localhost:3000',
+    'https://localhost:3000',
+    'http://192.168.2.125:3000',
+    'https://192.168.2.125:3000',
+]
+
+# CSRF-Exemption für API-Endpunkte
+CSRF_EXEMPT_URLS = [
+    r'^/api/.*$',  # Alle API-Endpunkte
 ]
 
 SIMPLE_JWT = {

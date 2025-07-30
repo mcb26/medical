@@ -28,7 +28,8 @@ from .models import (
     Bundesland,
     WorkingHour,
     Practice,
-    Absence
+    Absence,
+
 )
 from .services.appointment_series import AppointmentSeriesService
 from .services.bulk_billing_service import BulkBillingService
@@ -439,6 +440,8 @@ class AbsenceAdmin(admin.ModelAdmin):
 
     class Media:
         js = ('admin/js/absence_form.js',)  # Für dynamische Formularanpassungen
+
+
 
 # Basis Admin-Registrierungen
 admin.site.register(User)

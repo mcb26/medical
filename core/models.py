@@ -4,12 +4,15 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.utils.timezone import now, make_aware
 from datetime import datetime, date, timedelta
+from django.db.models import Q
 from core.appointment_validators import (
     validate_conflict_for_appointment,
     validate_appointment_conflicts,
     validate_working_hours
 )
-from core.appointment_validators import validate_holiday
+
+
+
 
 # Bundesland Model
 class Bundesland(models.Model):
@@ -75,8 +78,30 @@ class User(AbstractUser):
         verbose_name='user permissions',
     )
 
+    username = models.CharField(
+        max_length=150,
+        unique=True,  # Wieder unique für Standard-Django-Auth
+        verbose_name="Benutzername",
+        help_text="Benötigt. 150 Zeichen oder weniger. Buchstaben, Ziffern und @/./+/-/_ nur.",
+        error_messages={
+            "max_length": "Der Benutzername darf maximal 150 Zeichen haben.",
+        },
+    )
+
     def __str__(self):
         return f"{self.username} ({self.role})"
+    
+    def clean(self):
+        """Validiert das User-Model"""
+        super().clean()
+        # Stelle sicher, dass entweder Username oder E-Mail gesetzt ist
+        if not self.username and not self.email:
+            raise ValidationError("Entweder Username oder E-Mail muss gesetzt sein.")
+    
+    def save(self, *args, **kwargs):
+        """Speichert das User-Model"""
+        self.clean()
+        super().save(*args, **kwargs)
 
 # InsuranceProviderGroup Model
 class InsuranceProviderGroup(models.Model):
@@ -668,7 +693,7 @@ class Appointment(models.Model):
     def clean(self):
         super().clean()
         if self.room and self.room.practice:
-            validate_holiday(self.appointment_date, self.room.practice.bundesland)
+            pass
 
     def save(self, *args, **kwargs):
         if not self.duration_minutes and self.treatment:

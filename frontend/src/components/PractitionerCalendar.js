@@ -13,7 +13,8 @@ const PractitionerCalendar = ({
     onPrev,
     onNext,
     onToday,
-    openingHours
+    openingHours,
+    showWeekends
 }) => {
     const [practitioners, setPractitioners] = useState([]);
     const [events, setEvents] = useState([]);
@@ -484,6 +485,7 @@ const PractitionerCalendar = ({
             onNext={onNext}
             onToday={onToday}
             openingHours={openingHours}
+            weekends={showWeekends}
         />
     );
 };

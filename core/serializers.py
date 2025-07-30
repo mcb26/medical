@@ -4,6 +4,7 @@ from django.utils import timezone
 import logging
 from datetime import datetime
 from django.utils.timezone import make_aware
+from django.db.models import Q
 
 from .models import (
     Bundesland,
@@ -67,6 +68,8 @@ class UserSerializer(serializers.ModelSerializer):
             'date_joined',
             'last_login',
         ]
+
+
 
 class InsuranceProviderGroupSerializer(serializers.ModelSerializer):
     class Meta:
