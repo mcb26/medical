@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import resourceTimeGridPlugin from '@fullcalendar/resource-timegrid';
 import resourceTimelinePlugin from '@fullcalendar/resource-timeline';
@@ -6,6 +6,8 @@ import interactionPlugin from '@fullcalendar/interaction';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import deLocale from '@fullcalendar/core/locales/de';
+import { Menu, MenuItem, ListItemIcon, ListItemText } from '@mui/material';
+import { Receipt, Edit, Delete, Visibility } from '@mui/icons-material';
 
 const plugins = [
     resourceTimeGridPlugin,
@@ -151,6 +153,7 @@ const BaseCalendar = ({
     onDateSelect,
     onEventDrop,
     onEventResize,
+    onEventMarkReadyToBill,
     initialView = 'resourceTimeGridDay',
     view,
     date,
@@ -168,6 +171,8 @@ const BaseCalendar = ({
     resourceType = 'practitioners' // Neu: um zu unterscheiden ob Räume oder Behandler
 }) => {
     const calendarRef = useRef(null);
+    const [contextMenu, setContextMenu] = useState(null);
+    const [selectedEvent, setSelectedEvent] = useState(null);
 
     useEffect(() => {
         if (calendarRef.current && view) {
@@ -191,6 +196,48 @@ const BaseCalendar = ({
         } else {
             onEventClick?.(info);
         }
+    };
+
+    const handleEventRightClick = (info) => {
+        info.jsEvent.preventDefault();
+        setSelectedEvent(info.event);
+        setContextMenu({
+            mouseX: info.jsEvent.clientX,
+            mouseY: info.jsEvent.clientY,
+        });
+    };
+
+    const handleContextMenuClose = () => {
+        setContextMenu(null);
+        setSelectedEvent(null);
+    };
+
+    const handleMarkReadyToBill = () => {
+        if (selectedEvent && onEventMarkReadyToBill) {
+            onEventMarkReadyToBill(selectedEvent);
+        }
+        handleContextMenuClose();
+    };
+
+    const handleEditEvent = () => {
+        if (selectedEvent && onEventClick) {
+            onEventClick({ event: selectedEvent });
+        }
+        handleContextMenuClose();
+    };
+
+    const handleDeleteEvent = () => {
+        if (selectedEvent && onEventDelete) {
+            onEventDelete(selectedEvent);
+        }
+        handleContextMenuClose();
+    };
+
+    const handleViewEvent = () => {
+        if (selectedEvent && onEventDoubleClick) {
+            onEventDoubleClick({ event: selectedEvent });
+        }
+        handleContextMenuClose();
     };
 
     // Handler für Datums-/Zeitauswahl (Doppelklick auf Zeitpunkt)
@@ -233,6 +280,13 @@ const BaseCalendar = ({
         ...(backgroundEvents || []),
         ...breakEvents
     ];
+
+    // Prüfe, ob der Termin als abrechnungsbereit markiert werden kann
+    const canMarkReadyToBill = (event) => {
+        if (!event) return false;
+        const status = event.extendedProps.status;
+        return status === 'completed';
+    };
 
     return (
         <>
@@ -285,7 +339,54 @@ const BaseCalendar = ({
                 allDayText='Info'
                 backgroundEvents={backgroundEvents}
                 slotLabelInterval="00:15"
+                eventDidMount={(info) => {
+                    // Füge Rechtsklick-Event hinzu
+                    const element = info.el;
+                    element.addEventListener('contextmenu', (e) => {
+                        e.preventDefault();
+                        handleEventRightClick(info);
+                    });
+                }}
             />
+            
+            {/* Kontextmenü */}
+            <Menu
+                open={contextMenu !== null}
+                onClose={handleContextMenuClose}
+                anchorReference="anchorPosition"
+                anchorPosition={
+                    contextMenu !== null
+                        ? { top: contextMenu.mouseY, left: contextMenu.mouseX }
+                        : undefined
+                }
+            >
+                <MenuItem onClick={handleViewEvent}>
+                    <ListItemIcon>
+                        <Visibility fontSize="small" />
+                    </ListItemIcon>
+                    <ListItemText>Details anzeigen</ListItemText>
+                </MenuItem>
+                <MenuItem onClick={handleEditEvent}>
+                    <ListItemIcon>
+                        <Edit fontSize="small" />
+                    </ListItemIcon>
+                    <ListItemText>Bearbeiten</ListItemText>
+                </MenuItem>
+                {canMarkReadyToBill(selectedEvent) && (
+                    <MenuItem onClick={handleMarkReadyToBill}>
+                        <ListItemIcon>
+                            <Receipt fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText>Abrechnungsbereit</ListItemText>
+                    </MenuItem>
+                )}
+                <MenuItem onClick={handleDeleteEvent}>
+                    <ListItemIcon>
+                        <Delete fontSize="small" />
+                    </ListItemIcon>
+                    <ListItemText>Löschen</ListItemText>
+                </MenuItem>
+            </Menu>
         </>
     );
 };

@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Box, TextField, Button, Typography } from '@mui/material';
-import axios from 'axios';
+import api from '../api/axios';
 
 function BillingCycleForm() {
   const [formData, setFormData] = useState({
-    cycle_start: '',
-    cycle_end: '',
+    start_date: '',
+    end_date: '',
   });
 
   const handleChange = (e) => {
@@ -18,10 +18,8 @@ function BillingCycleForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('http://localhost:8000/api/billing-cycles/', formData, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
-      });
-      alert('Billing cycle created successfully!');
+      await api.post('/billing-cycles/', formData);
+      alert('Abrechnungszyklus erfolgreich erstellt!');
     } catch (error) {
       console.error('Error creating billing cycle:', error);
     }
@@ -30,14 +28,14 @@ function BillingCycleForm() {
   return (
     <Box sx={{ maxWidth: '600px', mx: 'auto', mt: 8 }}>
       <Typography variant="h5" gutterBottom>
-        Create Billing Cycle
+        Abrechnungszyklus erstellen
       </Typography>
       <form onSubmit={handleSubmit}>
         <TextField
-          label="Start Date"
+          label="Startdatum"
           type="date"
-          name="cycle_start"
-          value={formData.cycle_start}
+          name="start_date"
+          value={formData.start_date}
           onChange={handleChange}
           fullWidth
           margin="normal"
@@ -46,10 +44,10 @@ function BillingCycleForm() {
         />
 
         <TextField
-          label="End Date"
+          label="Enddatum"
           type="date"
-          name="cycle_end"
-          value={formData.cycle_end}
+          name="end_date"
+          value={formData.end_date}
           onChange={handleChange}
           fullWidth
           margin="normal"
@@ -58,7 +56,7 @@ function BillingCycleForm() {
         />
 
         <Button type="submit" variant="contained" color="primary" fullWidth sx={{ mt: 2 }}>
-          Submit Billing Cycle
+          Abrechnungszyklus erstellen
         </Button>
       </form>
     </Box>

@@ -134,6 +134,32 @@ class PatientViewSet(viewsets.ModelViewSet):
     serializer_class = PatientSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        """Filtert Patienten nach Benutzerberechtigungen"""
+        user = self.request.user
+        
+        # Wenn der Benutzer ein Admin/Superuser ist, zeige alle Patienten
+        if user.is_superuser or user.is_admin:
+            return Patient.objects.all()
+            
+        # Wenn der Benutzer ein Therapeut ist, zeige nur seine Patienten
+        if user.is_therapist:
+            # Finde den Practitioner, der diesem User entspricht
+            practitioner = Practitioner.objects.filter(
+                first_name=user.first_name,
+                last_name=user.last_name
+            ).first()
+            if practitioner:
+                # Finde alle Patienten, die Termine bei diesem Practitioner haben
+                appointments = Appointment.objects.filter(practitioner=practitioner)
+                patient_ids = appointments.values_list('patient_id', flat=True).distinct()
+                return Patient.objects.filter(id__in=patient_ids)
+            else:
+                return Patient.objects.none()
+                
+        # Für normale Benutzer (Verwaltung) zeige alle Patienten
+        return Patient.objects.all()
+
     @action(detail=True, methods=['get'])
     def appointments(self, request, pk=None):
         """
@@ -215,15 +241,23 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = super().get_queryset()
 
-        # Wenn der Benutzer ein Admin/Staff ist, zeige alle Termine
-        if user.is_staff or user.role == 'Admin':
+        # Wenn der Benutzer ein Admin/Superuser ist, zeige alle Termine
+        if user.is_superuser or user.is_admin:
             return queryset
             
-        # Für normale Benutzer nur ihre eigenen Termine
-        if hasattr(user, 'practitioner'):
-            return queryset.filter(practitioner=user.practitioner)
+        # Wenn der Benutzer ein Therapeut ist, zeige nur seine eigenen Termine
+        if user.is_therapist:
+            # Hier müssen wir den Practitioner finden, der diesem User entspricht
+            # Da wir keine direkte Verknüpfung haben, suchen wir nach Namen
+            practitioner = Practitioner.objects.filter(
+                first_name=user.first_name,
+                last_name=user.last_name
+            ).first()
+            if practitioner:
+                return queryset.filter(practitioner=practitioner)
             
-        return queryset.none()  # Keine Termine für nicht-autorisierte Benutzer
+        # Für normale Benutzer (Verwaltung) zeige alle Termine
+        return queryset
 
     @action(detail=False, methods=['post'])
     def create_series(self, request):
@@ -496,9 +530,33 @@ class PrescriptionViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """
-        Überschreibt die Standard-Queryset mit zusätzlichen Joins
+        Überschreibt die Standard-Queryset mit zusätzlichen Joins und Benutzerberechtigungen
         """
-        queryset = Prescription.objects.all().select_related(
+        user = self.request.user
+        
+        # Wenn der Benutzer ein Admin/Superuser ist, zeige alle Verordnungen
+        if user.is_superuser or user.is_admin:
+            queryset = Prescription.objects.all()
+        # Wenn der Benutzer ein Therapeut ist, zeige nur Verordnungen seiner Patienten
+        elif user.is_therapist:
+            # Finde den Practitioner, der diesem User entspricht
+            practitioner = Practitioner.objects.filter(
+                first_name=user.first_name,
+                last_name=user.last_name
+            ).first()
+            if practitioner:
+                # Finde alle Termine dieses Practitioners und deren Verordnungen
+                appointments = Appointment.objects.filter(practitioner=practitioner)
+                prescription_ids = appointments.values_list('prescription_id', flat=True).distinct()
+                queryset = Prescription.objects.filter(id__in=prescription_ids)
+            else:
+                queryset = Prescription.objects.none()
+        # Für normale Benutzer (Verwaltung) zeige alle Verordnungen
+        else:
+            queryset = Prescription.objects.all()
+        
+        # Zusätzliche Joins für Performance
+        queryset = queryset.select_related(
             'patient',
             'doctor',
             'treatment_1',

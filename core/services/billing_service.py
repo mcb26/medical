@@ -81,6 +81,23 @@ class BillingService:
         )
 
     @staticmethod
+    def get_self_pay_appointments(
+        start_date: date,
+        end_date: date
+    ) -> List[Appointment]:
+        """
+        Findet alle Selbstzahler-Termine im gegebenen Zeitraum
+        """
+        return Appointment.objects.filter(
+            appointment_date__date__gte=start_date,
+            appointment_date__date__lte=end_date,
+            status='ready_to_bill',
+            treatment__is_self_pay=True
+        ).exclude(
+            billing_items__isnull=False
+        )
+
+    @staticmethod
     @transaction.atomic
     def create_billing_items(billing_cycle: BillingCycle, appointments: List[Appointment]) -> List[BillingItem]:
         """Erstellt Abrechnungspositionen für die gegebenen Termine"""
@@ -89,39 +106,75 @@ class BillingService:
         copay_total = Decimal('0.00')
         
         for appointment in appointments:
-            prescription = appointment.prescription
-            treatment = prescription.treatment_1  # Primärbehandlung
-            
             try:
-                surcharge = Surcharge.objects.get(
-                    treatment=treatment,
-                    insurance_provider_group=prescription.patient_insurance.insurance_provider.group
-                )
+                # Prüfe ob der Termin abgerechnet werden kann
+                if not appointment.can_be_billed():
+                    raise ValidationError(f"Termin {appointment.id} kann nicht abgerechnet werden.")
                 
+                # Hole die Abrechnungsbeträge
+                billing_amount = appointment.get_billing_amount()
+                if not billing_amount:
+                    raise ValidationError(f"Keine Abrechnungsbeträge für Termin {appointment.id} gefunden.")
+                
+                # Erstelle BillingItem
                 billing_item = BillingItem.objects.create(
                     billing_cycle=billing_cycle,
-                    prescription=prescription,
+                    prescription=appointment.prescription,  # Kann null sein für Selbstzahler
                     appointment=appointment,
-                    treatment=treatment,
-                    insurance_amount=surcharge.insurance_payment,
-                    patient_copay=surcharge.patient_payment
+                    treatment=appointment.treatment,
+                    insurance_amount=billing_amount['insurance_amount'],
+                    patient_copay=billing_amount['patient_copay']
                 )
                 billing_items.append(billing_item)
                 
                 # Summen aktualisieren
-                insurance_total += surcharge.insurance_payment
-                copay_total += surcharge.patient_payment
+                insurance_total += billing_amount['insurance_amount']
+                copay_total += billing_amount['patient_copay']
                 
-            except Surcharge.DoesNotExist:
-                raise ValidationError(
-                    f"Keine Preiskonfiguration gefunden für Treatment {treatment} und "
-                    f"Versicherungsgruppe {prescription.patient_insurance.insurance_provider.group}"
-                )
+            except Exception as e:
+                raise ValidationError(f"Fehler beim Erstellen der Abrechnungsposition für Termin {appointment.id}: {str(e)}")
 
         # Gesamtsummen im Abrechnungszyklus aktualisieren
-        billing_cycle.insurance_amount = insurance_total
-        billing_cycle.patient_copay = copay_total
+        billing_cycle.total_insurance_amount = insurance_total
+        billing_cycle.total_patient_copay = copay_total
         billing_cycle.save()
+        
+        return billing_items
+
+    @staticmethod
+    @transaction.atomic
+    def create_self_pay_billing_items(appointments: List[Appointment]) -> List[BillingItem]:
+        """Erstellt Abrechnungspositionen für Selbstzahler-Termine"""
+        billing_items = []
+        
+        for appointment in appointments:
+            try:
+                # Prüfe ob es sich um eine Selbstzahler-Behandlung handelt
+                if not appointment.is_self_pay():
+                    raise ValidationError(f"Termin {appointment.id} ist keine Selbstzahler-Behandlung.")
+                
+                # Prüfe ob der Termin abgerechnet werden kann
+                if not appointment.can_be_billed():
+                    raise ValidationError(f"Termin {appointment.id} kann nicht abgerechnet werden.")
+                
+                # Hole die Abrechnungsbeträge
+                billing_amount = appointment.get_billing_amount()
+                if not billing_amount:
+                    raise ValidationError(f"Keine Abrechnungsbeträge für Termin {appointment.id} gefunden.")
+                
+                # Erstelle BillingItem ohne BillingCycle (für separate Patientenrechnung)
+                billing_item = BillingItem.objects.create(
+                    billing_cycle=None,  # Wird später zugeordnet
+                    prescription=None,  # Keine Verordnung bei Selbstzahlern
+                    appointment=appointment,
+                    treatment=appointment.treatment,
+                    insurance_amount=Decimal('0.00'),  # Keine KK-Beteiligung
+                    patient_copay=billing_amount['patient_copay']
+                )
+                billing_items.append(billing_item)
+                
+            except Exception as e:
+                raise ValidationError(f"Fehler beim Erstellen der Selbstzahler-Abrechnung für Termin {appointment.id}: {str(e)}")
         
         return billing_items
 

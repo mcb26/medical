@@ -108,25 +108,24 @@ function BillingCycleDetail() {
           </Grid>
           
           <Grid item xs={12} md={6}>
-            <Typography>
-              <strong>Krankenkasse:</strong> {billingCycle.insurance_provider_name}
-            </Typography>
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <Typography>
-              <strong>Zeitraum:</strong> {
+            <Paper sx={{ p: 2 }}>
+              <Typography variant="h6" gutterBottom>Grundinformationen</Typography>
+              <Typography><strong>Krankenkasse:</strong> {billingCycle.insurance_provider_name}</Typography>
+              <Typography><strong>Status:</strong> {billingCycle.status}</Typography>
+              <Typography><strong>Zeitraum:</strong> {
                 format(new Date(billingCycle.start_date), 'dd.MM.yyyy', { locale: de })
               } - {
                 format(new Date(billingCycle.end_date), 'dd.MM.yyyy', { locale: de })
-              }
-            </Typography>
+              }</Typography>
+            </Paper>
           </Grid>
-          
-          <Grid item xs={12}>
-            <Typography>
-              <strong>Gesamtbetrag:</strong> {billingCycle.total_amount?.toFixed(2)} €
-            </Typography>
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 2 }}>
+              <Typography variant="h6" gutterBottom>Finanzielle Übersicht</Typography>
+              <Typography><strong>Gesamtbetrag KK:</strong> {billingCycle.total_insurance_amount?.toFixed(2)} €</Typography>
+              <Typography><strong>Gesamtzuzahlung:</strong> {billingCycle.total_patient_copay?.toFixed(2)} €</Typography>
+              <Typography><strong>Anzahl Positionen:</strong> {billingItems.length}</Typography>
+            </Paper>
           </Grid>
         </Grid>
       </Paper>

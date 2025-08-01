@@ -27,17 +27,50 @@ function BulkBillingForm() {
     setError('');
     setSuccess('');
 
+    // Validierung der Eingabedaten
+    const startDate = new Date(formData.start_date);
+    const endDate = new Date(formData.end_date);
+    
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      setError('Bitte geben Sie gültige Datumsformate ein.');
+      setLoading(false);
+      return;
+    }
+
+    if (startDate >= endDate) {
+      setError('Das Enddatum muss nach dem Startdatum liegen.');
+      setLoading(false);
+      return;
+    }
+
     try {
-      await api.post('/billing-cycles/bulk/', formData);
-      setSuccess('Massenabrechnung erfolgreich gestartet!');
+      const response = await api.post('/billing-cycles/bulk/', formData);
+      
+      // Zeige detaillierte Ergebnisse
+      let message = 'Massenabrechnung abgeschlossen:\n\n';
+      response.data.forEach(result => {
+        message += `${result.insurance_provider}: ${result.status}\n`;
+        if (result.status === 'success') {
+          message += `  - ${result.appointments_count} Termine\n`;
+          message += `  - KK-Betrag: ${result.total_insurance_amount} €\n`;
+          message += `  - Zuzahlung: ${result.total_patient_copay} €\n`;
+        } else if (result.status === 'error') {
+          message += `  - Fehler: ${result.message}\n`;
+        } else {
+          message += `  - ${result.message}\n`;
+        }
+        message += '\n';
+      });
+
+      setSuccess(message);
       setTimeout(() => {
         navigate('/billing-cycles');
-      }, 2000);
+      }, 5000); // Länger warten, damit der Benutzer die Ergebnisse lesen kann
     } catch (error) {
-      setError(
-        error.response?.data?.error || 
-        'Fehler beim Starten der Massenabrechnung'
-      );
+      const errorMessage = error.response?.data?.error || 
+                          error.response?.data?.message || 
+                          'Unbekannter Fehler bei der Massenabrechnung';
+      setError(`Fehler beim Starten der Massenabrechnung: ${errorMessage}`);
     } finally {
       setLoading(false);
     }

@@ -38,7 +38,7 @@ function InsuranceProviderList() {
   const columns = [
     {
       field: 'name',
-      headerName: 'Name',
+      headerName: 'Krankenkassenname',
       width: 250,
       filterable: true,
     },
@@ -141,6 +141,10 @@ function InsuranceProviderList() {
             toolbarFiltersTooltipHide: 'Filter ausblenden',
             toolbarFiltersTooltipShow: 'Filter anzeigen',
             toolbarQuickFilterPlaceholder: 'Suchen...',
+            toolbarExport: 'Export',
+            toolbarExportLabel: 'Export',
+            toolbarExportCSV: 'Als CSV exportieren',
+            toolbarExportPrint: 'Drucken',
           }}
         />
       </Paper>

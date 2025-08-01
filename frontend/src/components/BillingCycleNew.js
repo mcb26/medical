@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { TextField, Button, Box, MenuItem, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import api from '../api/axios';
 
 function BillingCycleNew() {
   const [insuranceProviders, setInsuranceProviders] = useState([]);
@@ -17,11 +17,8 @@ function BillingCycleNew() {
   }, []);
 
   const fetchInsuranceProviders = async () => {
-    const token = localStorage.getItem('accessToken');
     try {
-      const response = await axios.get('http://localhost:8000/api/insurance-providers/', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await api.get('/insurance-providers/');
       setInsuranceProviders(response.data);
     } catch (error) {
       console.error('Error fetching insurance providers:', error.response?.data || error.message);
@@ -35,11 +32,8 @@ function BillingCycleNew() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const token = localStorage.getItem('accessToken');
     try {
-      await axios.post('http://localhost:8000/api/billing-cycles/create/', formData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await api.post('/billing-cycles/', formData);
       navigate('/billing-cycles');
     } catch (error) {
       console.error('Error creating billing cycle:', error.response?.data || error.message);

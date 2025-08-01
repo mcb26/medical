@@ -165,6 +165,24 @@ function PrescriptionList() {
                   },
                 },
               }}
+              localeText={{
+                toolbarDensity: 'Zeilenhöhe',
+                toolbarDensityLabel: 'Zeilenhöhe',
+                toolbarDensityCompact: 'Kompakt',
+                toolbarDensityStandard: 'Standard',
+                toolbarDensityComfortable: 'Komfortabel',
+                toolbarColumns: 'Spalten',
+                toolbarColumnsLabel: 'Spalten auswählen',
+                toolbarFilters: 'Filter',
+                toolbarFiltersLabel: 'Filter anzeigen',
+                toolbarFiltersTooltipHide: 'Filter ausblenden',
+                toolbarFiltersTooltipShow: 'Filter anzeigen',
+                toolbarQuickFilterPlaceholder: 'Suchen...',
+                toolbarExport: 'Export',
+                toolbarExportLabel: 'Export',
+                toolbarExportCSV: 'Als CSV exportieren',
+                toolbarExportPrint: 'Drucken',
+              }}
             />
           </Paper>
         </Box>

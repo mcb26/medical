@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
+import { usePrescriptionNotifications } from '../hooks/useNotifications';
 import {
   Box,
   TextField,
@@ -18,6 +19,7 @@ function PrescriptionNew() {
   const [searchParams] = useSearchParams();
   const prescriptionId = searchParams.get('prescriptionId');
   const [error, setError] = useState('');
+  const { createNotification } = usePrescriptionNotifications();
   const [formData, setFormData] = useState({
     patient: '',
     doctor: '',
@@ -123,6 +125,10 @@ function PrescriptionNew() {
       };
 
       const response = await api.post('prescriptions/', dataToSend);
+      
+      // Benachrichtigung erstellen
+      createNotification('prescription', response.data);
+      
       navigate('/prescriptions');
     } catch (error) {
       console.error("Error creating prescription:", error);

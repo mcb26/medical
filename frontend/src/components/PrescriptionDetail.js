@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { getUserProfile } from '../services/auth';
+import { usePrescriptionPermissions } from '../hooks/usePermissions';
 import {
   Box,
   Typography,
@@ -54,8 +56,14 @@ function PrescriptionDetail() {
   const [practitioners, setPractitioners] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [showSeriesPreview, setShowSeriesPreview] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const { canEdit, canDelete } = usePrescriptionPermissions();
 
   useEffect(() => {
+    // Lade aktuellen Benutzer
+    const user = getUserProfile();
+    setCurrentUser(user);
+    
     const fetchData = async () => {
       try {
         const [prescriptionResponse, practitionersResponse, roomsResponse, appointmentsResponse] = await Promise.all([
@@ -83,6 +91,39 @@ function PrescriptionDetail() {
 
     fetchData();
   }, [id]);
+
+  // Prüfe, ob der aktuelle Benutzer diese Verordnung bearbeiten darf
+  const canEditThisPrescription = () => {
+    if (!currentUser || !prescription) return false;
+    
+    // Admins können alles bearbeiten
+    if (currentUser.is_admin || currentUser.is_superuser) return canEdit;
+    
+    // Therapeuten können nur ihre eigenen Verordnungen bearbeiten
+    if (currentUser.is_therapist) {
+      // Prüfe, ob der Patient dieser Verordnung Termine bei diesem Therapeuten hat
+      const hasAppointmentsWithTherapist = appointments.some(appointment => {
+        const practitionerName = appointment.practitioner_name || '';
+        const userFullName = `${currentUser.first_name} ${currentUser.last_name}`;
+        return practitionerName === userFullName;
+      });
+      return canEdit && hasAppointmentsWithTherapist;
+    }
+    
+    return canEdit;
+  };
+
+  const canDeleteThisPrescription = () => {
+    if (!currentUser || !prescription) return false;
+    
+    // Admins können alles löschen
+    if (currentUser.is_admin || currentUser.is_superuser) return canDelete;
+    
+    // Therapeuten können Verordnungen nicht löschen
+    if (currentUser.is_therapist) return false;
+    
+    return canDelete;
+  };
 
   const handlePdfUpload = async (event) => {
     const file = event.target.files[0];
@@ -207,14 +248,16 @@ function PrescriptionDetail() {
                 Zurück zur Liste
               </Button>
               <Box sx={{ display: 'flex', gap: 2 }}>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  startIcon={<EditIcon />}
-                  onClick={handleEdit}
-                >
-                  Bearbeiten
-                </Button>
+                {canEditThisPrescription() && (
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    startIcon={<EditIcon />}
+                    onClick={handleEdit}
+                  >
+                    Bearbeiten
+                  </Button>
+                )}
                 <Button
                   variant="outlined"
                   color="primary"
@@ -225,6 +268,16 @@ function PrescriptionDetail() {
               </Box>
             </Box>
           </Paper>
+
+          {/* Berechtigungshinweis für Therapeuten */}
+          {currentUser?.is_therapist && prescription && (
+            <Alert severity="info" sx={{ mb: 3 }}>
+              {canEditThisPrescription() 
+                ? "Dies ist Ihre Verordnung - Sie können sie bearbeiten."
+                : "Dies ist nicht Ihre Verordnung - Sie können sie nur anzeigen."
+              }
+            </Alert>
+          )}
 
           {/* Content */}
           <Paper elevation={3} sx={{ borderRadius: 2 }}>

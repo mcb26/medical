@@ -10,30 +10,21 @@ import { de } from 'date-fns/locale';
 function AppointmentList() {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchAppointments = async () => {
-      try {
-        const response = await api.get('/appointments/');
-        console.log('Rohdaten:', response.data); // Debug-Log
-        const formattedAppointments = response.data.map(appointment => ({
-          ...appointment,
-          id: appointment.id,
-          formattedDate: format(new Date(appointment.appointment_date), 'dd.MM.yyyy', { locale: de }),
-          formattedTime: format(new Date(appointment.appointment_date), 'HH:mm', { locale: de }),
-          // Formatiere die Zeitstempel direkt hier
-          formattedCreatedAt: appointment.created_at ? 
-            format(new Date(appointment.created_at), 'dd.MM.yyyy HH:mm', { locale: de }) : '-',
-          formattedUpdatedAt: appointment.updated_at ? 
-            format(new Date(appointment.updated_at), 'dd.MM.yyyy HH:mm', { locale: de }) : '-',
-        }));
-        setAppointments(formattedAppointments);
-        setLoading(false);
-      } catch (error) {
-        console.error('Fehler beim Laden der Termine:', error);
-        setLoading(false);
-      }
+        try {
+            setLoading(true);
+            const response = await api.get('/appointments/');
+            setAppointments(response.data);
+        } catch (error) {
+            console.error('Fehler beim Laden der Termine:', error);
+            setError('Fehler beim Laden der Termine');
+        } finally {
+            setLoading(false);
+        }
     };
 
     fetchAppointments();
@@ -189,6 +180,10 @@ function AppointmentList() {
             toolbarFiltersTooltipHide: 'Filter ausblenden',
             toolbarFiltersTooltipShow: 'Filter anzeigen',
             toolbarQuickFilterPlaceholder: 'Suchen...',
+            toolbarExport: 'Export',
+            toolbarExportLabel: 'Export',
+            toolbarExportCSV: 'Als CSV exportieren',
+            toolbarExportPrint: 'Drucken',
           }}
         />
       </Paper>

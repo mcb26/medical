@@ -24,11 +24,13 @@ import {
   ArrowBack
 } from '@mui/icons-material';
 import api from '../api/axios';
+import { usePatientNotifications } from '../hooks/useNotifications';
 
 function PatientNew() {
   const navigate = useNavigate();
   const [activeStep, setActiveStep] = useState(0);
   const [error, setError] = useState(null);
+  const { createNotification } = usePatientNotifications();
   
   const [formData, setFormData] = useState({
     first_name: '',
@@ -56,6 +58,10 @@ function PatientNew() {
     try {
       const response = await api.post('patients/', formData);
       console.log('Patient erstellt:', response.data);
+      
+      // Benachrichtigung erstellen
+      createNotification('patient', response.data);
+      
       navigate('/patients');
     } catch (error) {
       setError(error.response?.data?.message || 'Fehler beim Erstellen des Patienten');

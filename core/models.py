@@ -57,51 +57,307 @@ class ICDCode(models.Model):
     def __str__(self):
         return f"{self.code} - {self.title}"
 
-# User Model
-class User(AbstractUser):
-    role = models.CharField(max_length=50, choices=[('Admin', 'Admin'), ('Staff', 'Staff')], default='Staff')
-    department = models.CharField(max_length=100, null=True, blank=True)
-    default_practitioner = models.ForeignKey('Practitioner', null=True, blank=True, on_delete=models.SET_NULL, related_name='default_users')
+# Benutzerrollen
+class UserRole(models.Model):
+    ROLE_CHOICES = [
+        ('owner', 'Inhaber'),
+        ('admin', 'Administrator'),
+        ('doctor', 'Arzt'),
+        ('nurse', 'Krankenschwester'),
+        ('receptionist', 'Empfang'),
+        ('accountant', 'Buchhalter'),
+        ('assistant', 'Assistent'),
+        ('intern', 'Praktikant'),
+    ]
+    
+    name = models.CharField(max_length=50, choices=ROLE_CHOICES, unique=True)
+    description = models.TextField(blank=True)
+    permissions = models.JSONField(default=dict)  # Speichert Modul-Berechtigungen
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
-    groups = models.ManyToManyField(
-        'auth.Group',
-        related_name='custom_user_set',
-        blank=True,
-        help_text='The groups this user belongs to. A user will get all permissions granted to each of their groups.',
-        verbose_name='groups',
-    )
-    user_permissions = models.ManyToManyField(
-        'auth.Permission',
-        related_name='custom_user_set_permissions',
-        blank=True,
-        help_text='Specific permissions for this user.',
-        verbose_name='user permissions',
-    )
-
-    username = models.CharField(
-        max_length=150,
-        unique=True,  # Wieder unique für Standard-Django-Auth
-        verbose_name="Benutzername",
-        help_text="Benötigt. 150 Zeichen oder weniger. Buchstaben, Ziffern und @/./+/-/_ nur.",
-        error_messages={
-            "max_length": "Der Benutzername darf maximal 150 Zeichen haben.",
-        },
-    )
+    class Meta:
+        verbose_name = "Benutzerrolle"
+        verbose_name_plural = "Benutzerrollen"
 
     def __str__(self):
-        return f"{self.username} ({self.role})"
+        return self.get_name_display()
+
+# Modul-Berechtigungen
+class ModulePermission(models.Model):
+    PERMISSION_CHOICES = [
+        ('none', 'Kein Zugriff'),
+        ('read', 'Nur Lesen'),
+        ('create', 'Erstellen'),
+        ('update', 'Bearbeiten'),
+        ('delete', 'Löschen'),
+        ('full', 'Voller Zugriff'),
+    ]
     
-    def clean(self):
-        """Validiert das User-Model"""
-        super().clean()
-        # Stelle sicher, dass entweder Username oder E-Mail gesetzt ist
-        if not self.username and not self.email:
-            raise ValidationError("Entweder Username oder E-Mail muss gesetzt sein.")
+    MODULE_CHOICES = [
+        ('appointments', 'Terminkalender'),
+        ('patients', 'Patienten'),
+        ('prescriptions', 'Verordnungen'),
+        ('treatments', 'Heilmittel'),
+        ('reports', 'Berichte'),
+        ('finance', 'Finanzen'),
+        ('billing', 'Abrechnung'),
+        ('settings', 'Einstellungen'),
+        ('users', 'Benutzerverwaltung'),
+    ]
     
+    user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='module_permissions', verbose_name="Benutzer")
+    module = models.CharField(max_length=20, choices=MODULE_CHOICES, verbose_name="Modul")
+    permission = models.CharField(max_length=10, choices=PERMISSION_CHOICES, default='none', verbose_name="Berechtigung")
+    granted_by = models.ForeignKey('User', on_delete=models.SET_NULL, null=True, blank=True, related_name='granted_permissions', verbose_name="Erteilt von")
+    granted_at = models.DateTimeField(auto_now_add=True, verbose_name="Erteilt am")
+    expires_at = models.DateTimeField(null=True, blank=True, verbose_name="Gültig bis")
+    is_active = models.BooleanField(default=True, verbose_name="Aktiv")
+    
+    class Meta:
+        verbose_name = "Modul-Berechtigung"
+        verbose_name_plural = "Modul-Berechtigungen"
+        unique_together = ('user', 'module')
+        ordering = ['user', 'module']
+
+    def __str__(self):
+        return f"{self.user.username} - {self.get_module_display()} - {self.get_permission_display()}"
+    
+    def is_expired(self):
+        """Prüft ob die Berechtigung abgelaufen ist"""
+        if self.expires_at:
+            return timezone.now() > self.expires_at
+        return False
+    
+    def is_valid(self):
+        """Prüft ob die Berechtigung gültig ist"""
+        return self.is_active and not self.is_expired()
+    
+    def has_permission(self, required_permission):
+        """Prüft ob der Benutzer die erforderliche Berechtigung hat"""
+        if not self.is_valid():
+            return False
+            
+        permission_hierarchy = {
+            'none': 0,
+            'read': 1,
+            'create': 2,
+            'update': 3,
+            'delete': 4,
+            'full': 5
+        }
+        
+        current_level = permission_hierarchy.get(self.permission, 0)
+        required_level = permission_hierarchy.get(required_permission, 0)
+        
+        return current_level >= required_level
+
+# Erweitere das User-Model
+class User(AbstractUser):
+    # Theme-Einstellungen
+    theme_mode = models.CharField(
+        max_length=20,
+        choices=[
+            ('light', 'Hell'),
+            ('dark', 'Dunkel'),
+            ('auto', 'Automatisch')
+        ],
+        default='light',
+        verbose_name="Theme-Modus"
+    )
+    theme_accent_color = models.CharField(
+        max_length=7,  # Hex-Farbe (#RRGGBB)
+        default='#3b82f6',
+        verbose_name="Akzentfarbe"
+    )
+    theme_font_size = models.CharField(
+        max_length=20,
+        choices=[
+            ('small', 'Klein'),
+            ('medium', 'Mittel'),
+            ('large', 'Groß')
+        ],
+        default='medium',
+        verbose_name="Schriftgröße"
+    )
+    theme_compact_mode = models.BooleanField(
+        default=False,
+        verbose_name="Kompakter Modus"
+    )
+    
+    # Neue Felder für Rollen und Berechtigungen
+    role = models.ForeignKey(UserRole, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Benutzerrolle")
+    custom_permissions = models.JSONField(default=dict, verbose_name="Individuelle Berechtigungen")
+    is_employee = models.BooleanField(default=False, verbose_name="Mitarbeiter")
+    employee_id = models.CharField(max_length=20, blank=True, verbose_name="Mitarbeiter-ID")
+    department = models.CharField(max_length=100, blank=True, verbose_name="Abteilung")
+    hire_date = models.DateField(null=True, blank=True, verbose_name="Einstellungsdatum")
+    supervisor = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Vorgesetzter")
+    
+    # Admin-Status
+    is_admin = models.BooleanField(default=False, verbose_name="Administrator", help_text="Administratoren haben automatisch alle Berechtigungen")
+    
+    # Therapeut-Status
+    is_therapist = models.BooleanField(default=False, verbose_name="Ist Therapeut", help_text="Therapeuten sehen nur ihre eigenen Termine und Patienten")
+    
+    # Modul-Zugriffe
+    can_access_patients = models.BooleanField(default=True, verbose_name="Patienten-Zugriff")
+    can_access_appointments = models.BooleanField(default=True, verbose_name="Termine-Zugriff")
+    can_access_prescriptions = models.BooleanField(default=True, verbose_name="Verordnungen-Zugriff")
+    can_access_treatments = models.BooleanField(default=True, verbose_name="Heilmittel-Zugriff")
+    can_access_finance = models.BooleanField(default=False, verbose_name="Finanzen-Zugriff")
+    can_access_reports = models.BooleanField(default=False, verbose_name="Berichte-Zugriff")
+    can_access_settings = models.BooleanField(default=False, verbose_name="Einstellungen-Zugriff")
+    can_manage_users = models.BooleanField(default=False, verbose_name="Benutzerverwaltung")
+    can_manage_roles = models.BooleanField(default=False, verbose_name="Rollenverwaltung")
+    
+    # Audit-Felder
+    last_login_ip = models.GenericIPAddressField(null=True, blank=True, verbose_name="Letzte Login-IP")
+    login_count = models.PositiveIntegerField(default=0, verbose_name="Login-Anzahl")
+    is_locked = models.BooleanField(default=False, verbose_name="Konto gesperrt")
+    lock_reason = models.TextField(blank=True, verbose_name="Sperrgrund")
+
+    class Meta:
+        verbose_name = "Benutzer"
+        verbose_name_plural = "Benutzer"
+
     def save(self, *args, **kwargs):
-        """Speichert das User-Model"""
-        self.clean()
+        """Automatisch is_admin setzen wenn is_superuser True ist"""
+        if self.is_superuser:
+            self.is_admin = True
         super().save(*args, **kwargs)
+
+    def has_module_permission(self, module_name, required_permission='read'):
+        """Prüft ob Benutzer die erforderliche Berechtigung für ein Modul hat"""
+        # Admin-Override: Admins haben alle Rechte
+        if self.is_superuser or self.is_admin:
+            return True
+            
+        # Prüfe individuelle Modul-Berechtigungen
+        try:
+            module_perm = self.module_permissions.get(module=module_name, is_active=True)
+            if module_perm and module_perm.is_valid():
+                return module_perm.has_permission(required_permission)
+        except ModulePermission.DoesNotExist:
+            pass
+            
+        # Fallback: Prüfe alte Berechtigungsfelder
+        if hasattr(self, f'can_access_{module_name}'):
+            return getattr(self, f'can_access_{module_name}', False)
+            
+        # Fallback: Prüfe Rollen-Berechtigungen
+        if self.role and self.role.permissions:
+            return self.role.permissions.get(module_name, False)
+            
+        return False
+
+    def get_effective_permissions(self):
+        """Gibt alle effektiven Berechtigungen zurück"""
+        permissions = {}
+        
+        # Alle verfügbaren Module
+        module_choices = ModulePermission.MODULE_CHOICES
+        
+        for module_code, module_name in module_choices:
+            # Bestimme das höchste Berechtigungslevel
+            permission_level = 'none'
+            if self.has_module_permission(module_code, 'full'):
+                permission_level = 'full'
+            elif self.has_module_permission(module_code, 'delete'):
+                permission_level = 'delete'
+            elif self.has_module_permission(module_code, 'update'):
+                permission_level = 'update'
+            elif self.has_module_permission(module_code, 'create'):
+                permission_level = 'create'
+            elif self.has_module_permission(module_code, 'read'):
+                permission_level = 'read'
+            
+            permissions[module_code] = {
+                'permission': permission_level,
+                'name': module_name
+            }
+            
+        return permissions
+    
+    def get_module_permission_level(self, module_name):
+        """Gibt das Berechtigungslevel für ein Modul zurück"""
+        if self.is_superuser or self.is_admin:
+            return 'full'
+            
+        try:
+            module_perm = self.module_permissions.get(module=module_name, is_active=True)
+            if module_perm and module_perm.is_valid():
+                return module_perm.permission
+        except ModulePermission.DoesNotExist:
+            pass
+            
+        return 'none'
+    
+    def grant_module_permission(self, module_name, permission_level, granted_by=None, expires_at=None):
+        """Erteilt eine Modul-Berechtigung"""
+        module_perm, created = ModulePermission.objects.get_or_create(
+            user=self,
+            module=module_name,
+            defaults={
+                'permission': permission_level,
+                'granted_by': granted_by,
+                'expires_at': expires_at,
+                'is_active': True
+            }
+        )
+        
+        if not created:
+            module_perm.permission = permission_level
+            module_perm.granted_by = granted_by
+            module_perm.expires_at = expires_at
+            module_perm.is_active = True
+            module_perm.save()
+        
+        return module_perm
+    
+    def revoke_module_permission(self, module_name):
+        """Entzieht eine Modul-Berechtigung"""
+        try:
+            module_perm = self.module_permissions.get(module=module_name)
+            module_perm.is_active = False
+            module_perm.save()
+            return True
+        except ModulePermission.DoesNotExist:
+            return False
+
+# Audit-Log für Benutzeraktivitäten
+class UserActivityLog(models.Model):
+    ACTION_CHOICES = [
+        ('login', 'Login'),
+        ('logout', 'Logout'),
+        ('create', 'Erstellt'),
+        ('update', 'Aktualisiert'),
+        ('delete', 'Gelöscht'),
+        ('view', 'Angesehen'),
+        ('export', 'Exportiert'),
+        ('import', 'Importiert'),
+        ('permission_change', 'Berechtigung geändert'),
+        ('role_change', 'Rolle geändert'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Benutzer")
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES, verbose_name="Aktion")
+    module = models.CharField(max_length=50, verbose_name="Modul")
+    object_type = models.CharField(max_length=50, blank=True, verbose_name="Objekt-Typ")
+    object_id = models.CharField(max_length=50, blank=True, verbose_name="Objekt-ID")
+    description = models.TextField(blank=True, verbose_name="Beschreibung")
+    ip_address = models.GenericIPAddressField(null=True, blank=True, verbose_name="IP-Adresse")
+    user_agent = models.TextField(blank=True, verbose_name="User-Agent")
+    timestamp = models.DateTimeField(auto_now_add=True, verbose_name="Zeitstempel")
+    
+    class Meta:
+        verbose_name = "Benutzeraktivität"
+        verbose_name_plural = "Benutzeraktivitäten"
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"{self.user.username} - {self.action} - {self.timestamp}"
 
 # InsuranceProviderGroup Model
 class InsuranceProviderGroup(models.Model):
@@ -421,12 +677,60 @@ class Treatment(models.Model):
     description = models.TextField()
     duration_minutes = models.IntegerField()
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True)
-    is_self_pay = models.BooleanField(default=False)
+    is_self_pay = models.BooleanField(default=False, verbose_name="Selbstzahler-Behandlung")
+    self_pay_price = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        verbose_name="Selbstzahler-Preis",
+        help_text="Preis für Selbstzahler-Behandlungen (ohne Verordnung)"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def clean(self):
+        # Wenn es eine Selbstzahler-Behandlung ist, muss ein Preis angegeben werden
+        if self.is_self_pay and not self.self_pay_price:
+            raise ValidationError("Für Selbstzahler-Behandlungen muss ein Preis angegeben werden.")
+        
+        # Dauer muss positiv sein
+        if self.duration_minutes <= 0:
+            raise ValidationError("Die Behandlungsdauer muss größer als 0 sein.")
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"{self.treatment_name} ({self.category})"
+        return f"{self.treatment_name} ({self.duration_minutes} Min.)"
+
+    class Meta:
+        verbose_name = "Behandlung"
+        verbose_name_plural = "Behandlungen"
+        ordering = ['treatment_name']
+
+    def get_price_for_insurance_group(self, insurance_group):
+        """Gibt den Preis für eine bestimmte Versicherungsgruppe zurück"""
+        try:
+            surcharge = Surcharge.objects.get(
+                treatment=self,
+                insurance_provider_group=insurance_group,
+                valid_from__lte=timezone.now().date(),
+                valid_until__gte=timezone.now().date()
+            )
+            return {
+                'insurance_amount': surcharge.insurance_payment,
+                'patient_copay': surcharge.patient_payment
+            }
+        except Surcharge.DoesNotExist:
+            return None
+
+    def get_self_pay_price(self):
+        """Gibt den Selbstzahler-Preis zurück"""
+        if self.is_self_pay and self.self_pay_price:
+            return self.self_pay_price
+        return None
 
 # Surcharge Model
 class Surcharge(models.Model):
@@ -459,6 +763,19 @@ class BillingCycle(models.Model):
         ],
         default='draft'
     )
+    # Neue Felder für Gesamtbeträge
+    total_insurance_amount = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0,
+        help_text="Gesamtbetrag der Krankenkasse"
+    )
+    total_patient_copay = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0,
+        help_text="Gesamtzuzahlung der Patienten"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -475,6 +792,16 @@ class BillingCycle(models.Model):
         return self.billing_items.aggregate(
             total=models.Sum('patient_copay')
         )['total'] or 0
+
+    def update_totals(self):
+        """Aktualisiert die Gesamtbeträge basierend auf den BillingItems"""
+        totals = self.billing_items.aggregate(
+            insurance_total=models.Sum('insurance_amount'),
+            copay_total=models.Sum('patient_copay')
+        )
+        self.total_insurance_amount = totals['insurance_total'] or 0
+        self.total_patient_copay = totals['copay_total'] or 0
+        self.save()
 
     def get_treatments_summary(self):
         """Gibt eine Zusammenfassung der Behandlungen zurück"""
@@ -603,37 +930,38 @@ class Prescription(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def clean(self):
-        super().clean()
-        # Versicherung prüfen
-        if self.patient and self.prescription_date:
-            valid_insurance = PatientInsurance.get_valid_insurance(
-                self.patient, 
-                self.prescription_date
-            )
-            if not valid_insurance:
-                raise ValidationError({
-                    'patient': f'Keine gültige Versicherung für {self.patient} am {self.prescription_date} gefunden.'
-                })
-            self.patient_insurance = valid_insurance
+        # Prüfe ob mindestens eine Behandlung ausgewählt ist
+        if not self.treatment_1 and not self.treatment_2 and not self.treatment_3:
+            raise ValidationError("Mindestens eine Behandlung muss ausgewählt werden.")
         
-        # Diagnosetext aus ICD-Code übernehmen
-        if self.diagnosis_code:
-            self.diagnosis_text = self.diagnosis_code.description
+        # Prüfe ob die Verordnung noch gültig ist (max. 1 Jahr alt)
+        if self.prescription_date:
+            max_age = timezone.now().date() - timedelta(days=365)
+            if self.prescription_date < max_age:
+                raise ValidationError("Verordnung ist älter als 1 Jahr und nicht mehr gültig.")
+        
+        # Prüfe ob die Krankenkasse zum Verordnungsdatum gültig war
+        if self.patient_insurance and self.prescription_date:
+            if (self.prescription_date < self.patient_insurance.valid_from or 
+                (self.patient_insurance.valid_to and self.prescription_date > self.patient_insurance.valid_to)):
+                raise ValidationError("Verordnung wurde zu einem Zeitpunkt erstellt, als die Krankenkasse nicht gültig war.")
 
     def save(self, *args, **kwargs):
-        if not self.pk:  # Nur bei neuen Objekten
-            self.clean()  # Stellt sicher, dass clean() aufgerufen wird
+        if self.diagnosis_code and not self.diagnosis_text:
+            self.diagnosis_text = f"{self.diagnosis_code.code} - {self.diagnosis_code.title}"
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"Verordnung {self.id} für {self.patient}"
+        return f"Verordnung {self.id} - {self.patient} ({self.prescription_date})"
 
     class Meta:
         ordering = ['-created_at']
 
     def get_all_treatments(self):
-        """Gibt alle aktiven Behandlungen zurück"""
-        treatments = [self.treatment_1]
+        """Gibt alle Behandlungen der Verordnung zurück"""
+        treatments = []
+        if self.treatment_1:
+            treatments.append(self.treatment_1)
         if self.treatment_2:
             treatments.append(self.treatment_2)
         if self.treatment_3:
@@ -641,16 +969,33 @@ class Prescription(models.Model):
         return treatments
 
     def get_primary_treatment_name(self):
-        return self.treatment_1.treatment_name if self.treatment_1 else ""
+        return self.treatment_1.treatment_name if self.treatment_1 else "Keine Behandlung"
 
     def get_treatment_names(self):
         """Gibt alle Behandlungsnamen als Liste zurück"""
-        names = [self.get_primary_treatment_name()]
-        if self.treatment_2:
-            names.append(self.treatment_2.treatment_name)
-        if self.treatment_3:
-            names.append(self.treatment_3.treatment_name)
-        return names
+        treatments = self.get_all_treatments()
+        return [t.treatment_name for t in treatments]
+
+    def is_valid_for_billing(self):
+        """Prüft ob die Verordnung für die Abrechnung gültig ist"""
+        if self.status != 'In_Progress':
+            return False
+        
+        # Prüfe ob die Krankenkasse noch gültig ist
+        if not self.patient_insurance.is_valid_at_date(timezone.now().date()):
+            return False
+        
+        # Prüfe ob mindestens eine Behandlung vorhanden ist
+        if not self.treatment_1:
+            return False
+        
+        return True
+
+    def can_be_billed(self):
+        """Prüft ob die Verordnung abgerechnet werden kann"""
+        return (self.is_valid_for_billing() and 
+                not self.patient_insurance.is_private and 
+                not self.treatment_1.is_self_pay)
 
 # Appointment Model
 class Appointment(models.Model):
@@ -691,40 +1036,101 @@ class Appointment(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def clean(self):
-        super().clean()
-        if self.room and self.room.practice:
-            pass
+        # Prüfe ob der Termin in der Zukunft liegt (außer bei abgeschlossenen Terminen)
+        if self.appointment_date and self.appointment_date < timezone.now() and self.status not in ['completed', 'ready_to_bill', 'billed', 'cancelled', 'no_show']:
+            raise ValidationError("Termine können nicht in der Vergangenheit liegen.")
+        
+        # Prüfe ob der Behandler verfügbar ist
+        if self.practitioner and self.appointment_date:
+            conflicts = validate_conflict_for_appointment(self)
+            if conflicts:
+                raise ValidationError(f"Terminkonflikt mit Behandler: {conflicts}")
+        
+        # Prüfe ob der Raum verfügbar ist (falls angegeben)
+        if self.room and self.appointment_date:
+            if not self.room.is_available_at(self.appointment_date):
+                raise ValidationError(f"Raum {self.room.name} ist zum gewählten Zeitpunkt nicht verfügbar.")
 
     def save(self, *args, **kwargs):
-        if not self.duration_minutes and self.treatment:
-            self.duration_minutes = self.treatment.duration_minutes
+        # Automatische Status-Änderung: Termine in der Vergangenheit auf "completed" setzen
+        if (self.appointment_date and 
+            self.appointment_date < timezone.now() and 
+            self.status in ['planned', 'confirmed']):
+            self.status = 'completed'
         
-        if self.id is None:  # Nur bei neuen Terminen
-            self.full_clean()  # Führt auch clean() aus
-            validate_conflict_for_appointment(
-                self.appointment_date,
-                self.duration_minutes or 30,  # Fallback auf 30 Minuten
-                self.practitioner,
-                self.room
-            )
-            validate_working_hours(
-                self.practitioner,
-                self.appointment_date,
-                self.duration_minutes or 30  # Fallback auf 30 Minuten
-            )
-        else:  # Bei Updates
-            validate_appointment_conflicts(self)
-            
+        # Automatische Status-Änderung: Abgeschlossene Termine auf "ready_to_bill" setzen
+        # (nur wenn sie eine gültige Verordnung haben und nicht bereits abgerechnet wurden)
+        if (self.status == 'completed' and 
+            self.prescription and 
+            self.prescription.can_be_billed() and
+            not self.billing_items.exists()):
+            self.status = 'ready_to_bill'
+        
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"Termin für {self.patient} am {self.appointment_date}"
+        return f"Termin {self.id} - {self.patient} am {self.appointment_date.strftime('%d.%m.%Y %H:%M')}"
 
     class Meta:
         ordering = ['appointment_date']
         verbose_name = "Termin"
         verbose_name_plural = "Termine"
 
+    def can_be_billed(self):
+        """Prüft ob der Termin abgerechnet werden kann"""
+        # Termin muss den Status "ready_to_bill" haben
+        if self.status != 'ready_to_bill':
+            return False
+        
+        # Termin darf noch nicht abgerechnet sein
+        if self.billing_items.exists():
+            return False
+        
+        # Wenn eine Verordnung vorhanden ist, muss sie gültig sein
+        if self.prescription:
+            return self.prescription.can_be_billed()
+        
+        # Ohne Verordnung nur als Selbstzahler möglich
+        return self.treatment.is_self_pay
+
+    def get_billing_amount(self):
+        """Gibt den Abrechnungsbetrag für den Termin zurück"""
+        if not self.can_be_billed():
+            return None
+        
+        # Wenn Verordnung vorhanden, verwende Surcharge
+        if self.prescription and self.prescription.patient_insurance:
+            try:
+                surcharge = Surcharge.objects.get(
+                    treatment=self.treatment,
+                    insurance_provider_group=self.prescription.patient_insurance.insurance_provider.group,
+                    valid_from__lte=self.appointment_date.date(),
+                    valid_until__gte=self.appointment_date.date()
+                )
+                return {
+                    'insurance_amount': surcharge.insurance_payment,
+                    'patient_copay': surcharge.patient_payment
+                }
+            except Surcharge.DoesNotExist:
+                return None
+        
+        # Ohne Verordnung: Selbstzahler-Preis
+        return {
+            'insurance_amount': Decimal('0.00'),
+            'patient_copay': self.treatment.self_pay_price if hasattr(self.treatment, 'self_pay_price') else Decimal('0.00')
+        }
+
+    def mark_as_ready_to_bill(self):
+        """Markiert den Termin als abrechnungsbereit"""
+        if self.status == 'completed' and self.can_be_billed():
+            self.status = 'ready_to_bill'
+            self.save()
+            return True
+        return False
+
+    def is_self_pay(self):
+        """Prüft ob es sich um eine Selbstzahler-Behandlung handelt"""
+        return not self.prescription or self.treatment.is_self_pay
 
 # WorkingHour Model
 class WorkingHour(models.Model):
@@ -866,8 +1272,35 @@ class Practice(models.Model):
         super().save(*args, **kwargs)
 
     def is_open_at(self, dt):
-        print("[DEBUG] Practice.is_open_at wurde aufgerufen und gibt True zurück!")
-        return True
+        """
+        Prüft, ob die Praxis zum angegebenen Zeitpunkt geöffnet ist.
+        """
+        # Hole den Wochentag (monday, tuesday, etc.)
+        day_name = dt.strftime('%A').lower()
+        
+        # Prüfe ob die Praxis an diesem Tag geöffnet ist
+        day_settings = self.opening_hours.get(day_name, {})
+        if not day_settings.get('open', False):
+            return False
+        
+        # Hole die Öffnungszeiten für diesen Tag
+        hours_str = day_settings.get('hours', '')
+        if not hours_str:
+            return False
+        
+        try:
+            # Parse die Öffnungszeiten (Format: "08:00-18:00")
+            start_str, end_str = hours_str.split('-')
+            start_time = datetime.strptime(start_str.strip(), '%H:%M').time()
+            end_time = datetime.strptime(end_str.strip(), '%H:%M').time()
+            
+            # Prüfe ob die gegebene Zeit innerhalb der Öffnungszeiten liegt
+            check_time = dt.time()
+            return start_time <= check_time <= end_time
+            
+        except (ValueError, AttributeError):
+            # Bei Fehlern im Format: Standardmäßig geschlossen
+            return False
 
     def get_display_hours(self):
         """Gibt die erweiterten Anzeigezeiten zurück (1h früher/später)"""
@@ -971,7 +1404,9 @@ class BillingItem(models.Model):
     prescription = models.ForeignKey(
         'Prescription',
         on_delete=models.PROTECT,  # Schützt vor versehentlichem Löschen
-        related_name='billing_items'
+        related_name='billing_items',
+        null=True,
+        blank=True  # Erlaubt BillingItems ohne Verordnung (Selbstzahler)
     )
     appointment = models.ForeignKey(
         'Appointment',
@@ -1003,25 +1438,77 @@ class BillingItem(models.Model):
     class Meta:
         verbose_name = "Abrechnungsposition"
         verbose_name_plural = "Abrechnungspositionen"
+        unique_together = ['appointment', 'billing_cycle']  # Verhindert Doppelabrechnung
+
+    def clean(self):
+        # Prüfe ob der Termin abgerechnet werden kann
+        if self.appointment and not self.appointment.can_be_billed():
+            raise ValidationError("Termin kann nicht abgerechnet werden.")
+        
+        # Prüfe ob bereits eine Abrechnungsposition für diesen Termin existiert
+        if self.appointment and self.billing_cycle:
+            existing = BillingItem.objects.filter(
+                appointment=self.appointment,
+                billing_cycle=self.billing_cycle
+            ).exclude(id=self.id)
+            if existing.exists():
+                raise ValidationError("Für diesen Termin existiert bereits eine Abrechnungsposition.")
+        
+        # Prüfe ob die Beträge korrekt sind
+        if self.insurance_amount < 0 or self.patient_copay < 0:
+            raise ValidationError("Beträge dürfen nicht negativ sein.")
+        
+        # Prüfe ob mindestens ein Betrag größer als 0 ist
+        if self.insurance_amount == 0 and self.patient_copay == 0:
+            raise ValidationError("Mindestens ein Betrag muss größer als 0 sein.")
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        
+        # Automatisch Beträge berechnen, falls nicht gesetzt
+        if not self.insurance_amount and not self.patient_copay:
+            billing_amount = self.appointment.get_billing_amount()
+            if billing_amount:
+                self.insurance_amount = billing_amount['insurance_amount']
+                self.patient_copay = billing_amount['patient_copay']
+        
+        super().save(*args, **kwargs)
+        
+        # Aktualisiere die Gesamtbeträge im BillingCycle
+        self.billing_cycle.update_totals()
 
     def __str__(self):
-        return f"Abrechnung {self.billing_cycle.id} - {self.prescription.id} - {self.appointment.appointment_date}"
+        return f"Abrechnungsposition {self.id} - {self.appointment} ({self.insurance_amount + self.patient_copay} €)"
 
     def calculate_amounts(self):
-        """Berechnet die Beträge basierend auf Treatment und Insurance Group"""
-        surcharge = Surcharge.objects.filter(
-            treatment=self.treatment,
-            insurance_provider_group=self.prescription.patient_insurance.insurance_provider.group
-        ).first()
-        
-        if surcharge:
-            self.insurance_amount = surcharge.insurance_payment
-            self.patient_copay = surcharge.patient_payment
+        """Berechnet die Beträge basierend auf der Surcharge oder dem Selbstzahler-Preis"""
+        if self.prescription and self.prescription.patient_insurance:
+            # Mit Verordnung: Verwende Surcharge
+            try:
+                surcharge = Surcharge.objects.get(
+                    treatment=self.treatment,
+                    insurance_provider_group=self.prescription.patient_insurance.insurance_provider.group,
+                    valid_from__lte=self.appointment.appointment_date.date(),
+                    valid_until__gte=self.appointment.appointment_date.date()
+                )
+                self.insurance_amount = surcharge.insurance_payment
+                self.patient_copay = surcharge.patient_payment
+            except Surcharge.DoesNotExist:
+                raise ValidationError(f"Keine Preiskonfiguration gefunden für {self.treatment} und {self.prescription.patient_insurance.insurance_provider.group}")
         else:
-            raise ValidationError(
-                f'Keine Preiskonfiguration gefunden für Treatment {self.treatment} und '
-                f'Versicherungsgruppe {self.prescription.patient_insurance.insurance_provider.group}'
-            )
+            # Ohne Verordnung: Selbstzahler-Preis
+            if not self.treatment.is_self_pay or not self.treatment.self_pay_price:
+                raise ValidationError(f"Behandlung {self.treatment} ist nicht als Selbstzahler-Behandlung konfiguriert.")
+            self.insurance_amount = Decimal('0.00')
+            self.patient_copay = self.treatment.self_pay_price
+
+    def get_total_amount(self):
+        """Gibt den Gesamtbetrag zurück"""
+        return self.insurance_amount + self.patient_copay
+
+    def is_self_pay(self):
+        """Prüft ob es sich um eine Selbstzahler-Behandlung handelt"""
+        return not self.prescription or self.treatment.is_self_pay
 
 class PatientInvoice(models.Model):
     INVOICE_STATUS = (

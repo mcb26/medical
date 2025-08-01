@@ -37,7 +37,7 @@ function InsuranceGroupList() {
   const columns = [
     { 
       field: 'name', 
-      headerName: 'Name', 
+      headerName: 'Gruppenname', 
       width: 250,
       filterable: true,
     },
@@ -109,6 +109,10 @@ function InsuranceGroupList() {
             toolbarFiltersTooltipHide: 'Filter ausblenden',
             toolbarFiltersTooltipShow: 'Filter anzeigen',
             toolbarQuickFilterPlaceholder: 'Suchen...',
+            toolbarExport: 'Export',
+            toolbarExportLabel: 'Export',
+            toolbarExportCSV: 'Als CSV exportieren',
+            toolbarExportPrint: 'Drucken',
           }}
         />
       </Paper>

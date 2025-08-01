@@ -1,18 +1,16 @@
-from datetime import timedelta, datetime, time
-from django.utils.timezone import make_aware
+from datetime import datetime, date, timedelta, time
 from django.core.exceptions import ValidationError
-from core.models import Appointment, WorkingHour, Practice
-import json
-
+from django.utils.timezone import make_aware
+from core.models import Appointment, Practice, WorkingHour, Absence
 
 def propose_and_create_appointments(prescription, interval_days, room, practitioner, treatment, start_date=None, number_of_sessions=None, start_time=None):
     """
-    Vorschlag und Erstellung von Terminen für ein Rezept.
+    Erstellt eine Serie von Terminen basierend auf einer Verordnung.
     
-    :param prescription: Prescription-Objekt, das die Details enthält.
-    :param interval_days: Abstand zwischen Terminen in Tagen.
-    :param room: Raum-Objekt, für den der Termin geplant wird.
-    :param practitioner: Behandler-Objekt, der den Termin durchführt.
+    :param prescription: Verordnung-Objekt, auf der die Termine basieren.
+    :param interval_days: Anzahl der Tage zwischen den Terminen.
+    :param room: Raum-Objekt, in dem die Termine stattfinden.
+    :param practitioner: Behandler-Objekt, der die Termine durchführt.
     :param treatment: Behandlung-Objekt, die durchgeführt wird.
     :param start_date: Startdatum der Termine.
     :param number_of_sessions: Anzahl der zu erstellenden Termine.
@@ -52,11 +50,11 @@ def propose_and_create_appointments(prescription, interval_days, room, practitio
             raise ValidationError(f"Termin am {appointment_date} liegt außerhalb der Öffnungszeiten.")
 
         # Prüfen, ob der Raum verfügbar ist
-        if not is_room_available(room, appointment_datetime):
+        if not is_room_available(room, appointment_datetime, treatment.duration_minutes):
             raise ValidationError(f"Der Raum ist am {appointment_date} nicht verfügbar.")
 
         # Prüfen, ob der Behandler verfügbar ist
-        if not is_practitioner_available(practitioner, appointment_datetime):
+        if not is_practitioner_available(practitioner, appointment_datetime, treatment.duration_minutes):
             raise ValidationError(f"Der Behandler ist am {appointment_date} nicht verfügbar.")
 
         # Termin erstellen mit allen notwendigen Verknüpfungen
@@ -68,8 +66,7 @@ def propose_and_create_appointments(prescription, interval_days, room, practitio
             treatment=treatment,
             appointment_date=appointment_datetime,
             duration_minutes=treatment.duration_minutes,
-            status='planned',
-            patient_insurance=prescription.patient_insurance  # Wichtig: Krankenkasse aus der Prescription übernehmen
+            status='planned'
         )
         
         try:
@@ -86,29 +83,88 @@ def is_within_practice_hours(appointment_datetime):
     Prüft, ob der Termin innerhalb der Öffnungszeiten der Praxis liegt.
     """
     practice = Practice.get_instance()
-    print(f"[DEBUG] Prüfung Öffnungszeiten für: {appointment_datetime}")
     return practice.is_open_at(appointment_datetime)
 
-def is_room_available(room, appointment_datetime):
+def is_room_available(room, appointment_datetime, duration_minutes):
     """
     Prüft, ob der Raum zum angegebenen Zeitpunkt verfügbar ist.
     """
-    # TODO: Implementiere die tatsächliche Verfügbarkeitsprüfung
-    print("[DEBUG] is_room_available wurde aufgerufen und gibt True zurück!")
-    return True
+    if not room:
+        return True  # Kein Raum zugewiesen = verfügbar
+    
+    # Prüfe ob der Raum aktiv ist
+    if not room.is_active:
+        return False
+    
+    # Prüfe ob der Raum zu diesem Zeitpunkt geöffnet ist
+    if not room.is_available_at(appointment_datetime):
+        return False
+    
+    # Prüfe auf Terminkonflikte im Raum
+    end_datetime = appointment_datetime + timedelta(minutes=duration_minutes)
+    
+    conflicting_appointments = Appointment.objects.filter(
+        room=room,
+        appointment_date__lt=end_datetime,
+        appointment_date__gte=appointment_datetime,
+        status__in=['planned', 'confirmed']
+    ).exclude(status='cancelled')
+    
+    return not conflicting_appointments.exists()
 
-def is_practitioner_available(practitioner, appointment_datetime):
+def is_practitioner_available(practitioner, appointment_datetime, duration_minutes):
     """
     Prüft, ob der Behandler zum angegebenen Zeitpunkt verfügbar ist.
     """
-    # TODO: Implementiere die tatsächliche Verfügbarkeitsprüfung
-    print("[DEBUG] is_practitioner_available wurde aufgerufen und gibt True zurück!")
-    return True
-
-def is_open_at(self, dt):
-    """
-    Prüft, ob die Praxis zum angegebenen Zeitpunkt geöffnet ist.
-    """
-    # TODO: Implementiere die tatsächliche Öffnungszeitenprüfung
-    print("[DEBUG] is_open_at wurde aufgerufen und gibt True zurück!")
-    return True
+    if not practitioner:
+        return False
+    
+    # Prüfe ob der Behandler aktiv ist
+    if not practitioner.is_active:
+        return False
+    
+    # Prüfe Arbeitszeiten
+    day_of_week = appointment_datetime.strftime('%A').lower()
+    working_hours = WorkingHour.objects.filter(
+        practitioner=practitioner,
+        day_of_week__iexact=day_of_week,
+        valid_from__lte=appointment_datetime.date(),
+        valid_until__isnull=True
+    ).first()
+    
+    if not working_hours:
+        return False
+    
+    appointment_time = appointment_datetime.time()
+    end_time = (datetime.combine(date.today(), appointment_time) + 
+                timedelta(minutes=duration_minutes)).time()
+    
+    if appointment_time < working_hours.start_time or end_time > working_hours.end_time:
+        return False
+    
+    # Prüfe auf Abwesenheiten
+    absences = Absence.objects.filter(
+        practitioner=practitioner,
+        start_date__lte=appointment_datetime.date(),
+        end_date__gte=appointment_datetime.date()
+    )
+    
+    for absence in absences:
+        if absence.is_full_day:
+            return False
+        elif (absence.start_time and absence.end_time and
+              appointment_time >= absence.start_time and 
+              end_time <= absence.end_time):
+            return False
+    
+    # Prüfe auf Terminkonflikte
+    end_datetime = appointment_datetime + timedelta(minutes=duration_minutes)
+    
+    conflicting_appointments = Appointment.objects.filter(
+        practitioner=practitioner,
+        appointment_date__lt=end_datetime,
+        appointment_date__gte=appointment_datetime,
+        status__in=['planned', 'confirmed']
+    ).exclude(status='cancelled')
+    
+    return not conflicting_appointments.exists()

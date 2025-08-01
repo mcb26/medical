@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import api from '../api/axios';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { TextField, Button, Box, MenuItem, Checkbox, FormControlLabel, Grid, Typography } from '@mui/material';
+import { useAppointmentNotifications } from '../hooks/useNotifications';
+import { isAuthenticated, getUserProfile } from '../services/auth';
 
 function NewAppointment() {
   const [patients, setPatients] = useState([]);
@@ -9,6 +11,8 @@ function NewAppointment() {
   const [rooms, setRooms] = useState([]);
   const [treatments, setTreatments] = useState([]);
   const [insurances, setInsurances] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  const { createNotification } = useAppointmentNotifications();
   const [formData, setFormData] = useState({
     patient: '',
     practitioner: '',
@@ -84,8 +88,34 @@ function NewAppointment() {
       setRooms(roomsRes.data);
       setTreatments(treatmentsRes.data);
       setInsurances(insurancesRes.data);
+      
+      // Lade den aktuellen User nach dem Laden der Practitioners
+      await loadCurrentUser(practitionersRes.data);
     } catch (error) {
       console.error('Fehler beim Laden der Daten:', error);
+    }
+  };
+
+  const loadCurrentUser = async (practitionersList = []) => {
+    try {
+      const user = getUserProfile();
+      setCurrentUser(user);
+      
+      // Wenn der User ein Therapeut ist, setze ihn als Standard-Practitioner
+      if (user && user.is_therapist) {
+        // Finde den entsprechenden Practitioner
+        const practitioner = practitionersList.find(p => 
+          p.first_name === user.first_name && p.last_name === user.last_name
+        );
+        if (practitioner) {
+          setFormData(prev => ({
+            ...prev,
+            practitioner: practitioner.id.toString()
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden des aktuellen Users:', error);
     }
   };
 
@@ -127,6 +157,10 @@ function NewAppointment() {
 
       console.log('Sende Daten:', formattedData);
       const response = await api.post('appointments/', formattedData);
+      
+      // Benachrichtigung erstellen
+      createNotification('appointment', response.data);
+      
       navigate('/appointments');
     } catch (error) {
       console.error('Error creating appointment:', error.response?.data || error);

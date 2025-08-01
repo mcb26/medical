@@ -53,18 +53,54 @@ function BillingCycleList() {
       const startDate = prompt('Startdatum (YYYY-MM-DD):');
       const endDate = prompt('Enddatum (YYYY-MM-DD):');
       
-      if (!startDate || !endDate) return;
+      if (!startDate || !endDate) {
+        alert('Bitte geben Sie Start- und Enddatum ein.');
+        return;
+      }
+
+      // Validierung der Datumsformate
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        alert('Bitte geben Sie gültige Datumsformate ein (YYYY-MM-DD).');
+        return;
+      }
+
+      if (start >= end) {
+        alert('Das Enddatum muss nach dem Startdatum liegen.');
+        return;
+      }
 
       const response = await api.post('/billing-cycles/bulk/', {
         start_date: startDate,
         end_date: endDate
       });
 
-      alert('Massenabrechnung erfolgreich gestartet!');
+      // Zeige detaillierte Ergebnisse
+      let message = 'Massenabrechnung abgeschlossen:\n\n';
+      response.data.forEach(result => {
+        message += `${result.insurance_provider}: ${result.status}\n`;
+        if (result.status === 'success') {
+          message += `  - ${result.appointments_count} Termine\n`;
+          message += `  - KK-Betrag: ${result.total_insurance_amount} €\n`;
+          message += `  - Zuzahlung: ${result.total_patient_copay} €\n`;
+        } else if (result.status === 'error') {
+          message += `  - Fehler: ${result.message}\n`;
+        } else {
+          message += `  - ${result.message}\n`;
+        }
+        message += '\n';
+      });
+
+      alert(message);
       fetchBillingCycles(); // Liste aktualisieren
     } catch (error) {
       console.error('Fehler bei der Massenabrechnung:', error);
-      alert('Fehler bei der Massenabrechnung');
+      const errorMessage = error.response?.data?.error || 
+                          error.response?.data?.message || 
+                          'Unbekannter Fehler bei der Massenabrechnung';
+      alert(`Fehler bei der Massenabrechnung: ${errorMessage}`);
     }
   };
 
@@ -110,10 +146,26 @@ function BillingCycleList() {
       ),
     },
     {
-      field: 'formattedAmount',
-      headerName: 'Gesamtbetrag',
+      field: 'total_insurance_amount',
+      headerName: 'KK-Betrag',
       width: 150,
       filterable: true,
+      renderCell: (params) => (
+        <Typography>
+          {params.value ? `${parseFloat(params.value).toFixed(2)} €` : '0.00 €'}
+        </Typography>
+      ),
+    },
+    {
+      field: 'total_patient_copay',
+      headerName: 'Zuzahlung',
+      width: 150,
+      filterable: true,
+      renderCell: (params) => (
+        <Typography>
+          {params.value ? `${parseFloat(params.value).toFixed(2)} €` : '0.00 €'}
+        </Typography>
+      ),
     },
     {
       field: 'actions',

@@ -1,5 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { ThemeProvider } from '@mui/material/styles';
+import { CssBaseline } from '@mui/material';
+import getCurrentTheme from './theme';
+import { fetchUserProfile, isAuthenticated } from './services/auth';
+import themeService from './services/themeService';
+import { ToastContainer } from './components/common/ToastNotifications';
 import DashboardLayout from './components/DashboardLayout';
 import Home from './components/Home';
 import Calendar from './components/Calendar';
@@ -72,12 +78,51 @@ import BulkBillingForm from './components/BulkBillingForm';
 import FinanceOverview from './components/FinanceOverview';
 import PatientEdit from './components/PatientEdit';
 import AppointmentSeriesNew from './components/AppointmentSeriesNew';
+import Notifications from './components/Notifications';
+import ThemeSettings from './components/ThemeSettings';
+import AdminPanel from './components/AdminPanel';
+import { PermissionProvider } from './hooks/usePermissions';
 
 
 function App() {
+  const [currentTheme, setCurrentTheme] = useState(getCurrentTheme());
+
+  // Benutzerprofil beim App-Start laden, falls der Benutzer angemeldet ist
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      // Nur laden wenn User wirklich eingeloggt ist UND ein Token vorhanden ist
+      const token = localStorage.getItem('token');
+      if (isAuthenticated() && token) {
+        try {
+          await fetchUserProfile();
+        } catch (error) {
+          console.error('Error loading user profile:', error);
+        }
+      }
+    };
+
+    loadUserProfile();
+  }, []);
+
+  // Theme-Änderungen überwachen
+  useEffect(() => {
+    const handleThemeChange = () => {
+      // Theme neu erstellen, um die aktuellen Einstellungen zu verwenden
+      const newTheme = getCurrentTheme();
+      setCurrentTheme(newTheme);
+    };
+
+    window.addEventListener('themeChanged', handleThemeChange);
+    return () => window.removeEventListener('themeChanged', handleThemeChange);
+  }, []);
+
   return (
-    <Router>
-      <Routes>
+    <ThemeProvider theme={currentTheme}>
+      <CssBaseline />
+      <ToastContainer />
+      <PermissionProvider>
+        <Router>
+        <Routes>
         <Route path="/" element={<PrivateRoute><DashboardLayout /></PrivateRoute>}>
           <Route path="/" element={<Home />} />
           <Route path="/calendar" element={<Calendar />} />
@@ -142,6 +187,9 @@ function App() {
           <Route path="/bundesland/:id/edit" element={<BundeslandEdit />} />
           <Route path="/working-hours/:id/edit" element={<WorkingHourEdit />} />
           <Route path="/patients/:id/edit" element={<PatientEdit />} />
+          <Route path="/notifications" element={<Notifications />} />
+          <Route path="/theme-settings" element={<ThemeSettings />} />
+          <Route path="/admin-panel" element={<AdminPanel />} />
         </Route>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
@@ -156,6 +204,8 @@ function App() {
         <Route path="/billing-cycles/bulk" element={<BulkBillingForm />} />
       </Routes>
     </Router>
+        </PermissionProvider>
+    </ThemeProvider>
   );
 }
 

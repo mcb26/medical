@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import api from '../api/axios';
+import { getUserProfile } from '../services/auth';
+import { useAppointmentPermissions } from '../hooks/usePermissions';
 import {
-  Box, Typography, Paper, TextField, Button, MenuItem, Grid, Card, CardContent, Chip, Divider, IconButton
+  Box, Typography, Paper, TextField, Button, MenuItem, Grid, Card, CardContent, Chip, Divider, IconButton, Alert
 } from '@mui/material';
-import { Person, Event, AccessTime, LocalHospital, Room, Edit, Delete, Save, Cancel } from '@mui/icons-material';
+import { Person, Event, AccessTime, LocalHospital, Room, Edit, Delete, Save, Cancel, Receipt } from '@mui/icons-material';
 import AppointmentSeriesForm from './AppointmentSeriesForm';
 
 function AppointmentDetail() {
@@ -20,8 +22,14 @@ function AppointmentDetail() {
   const [treatments, setTreatments] = useState([]);
   const [editMode, setEditMode] = useState(false);
   const [formState, setFormState] = useState({});
+  const [currentUser, setCurrentUser] = useState(null);
+  const { canEdit, canDelete } = useAppointmentPermissions();
 
   useEffect(() => {
+    // Lade aktuellen Benutzer
+    const user = getUserProfile();
+    setCurrentUser(user);
+    
     const fetchAppointment = async () => {
       if (location.pathname === '/appointments/create_series') {
         setLoading(false);
@@ -105,6 +113,20 @@ function AppointmentDetail() {
     }
   };
 
+  const handleMarkReadyToBill = async () => {
+    if (window.confirm('Termin als abrechnungsbereit markieren?')) {
+      try {
+        const updatedAppointment = { ...appointment, status: 'ready_to_bill' };
+        await api.put(`appointments/${id}/`, updatedAppointment);
+        setAppointment(updatedAppointment);
+        alert('Termin wurde als abrechnungsbereit markiert.');
+      } catch (error) {
+        console.error('Fehler beim Markieren als abrechnungsbereit:', error.response?.data || error.message);
+        alert('Fehler beim Markieren als abrechnungsbereit.');
+      }
+    }
+  };
+
   if (location.pathname === '/appointments/create_series') {
     return <AppointmentSeriesForm />;
   }
@@ -141,6 +163,59 @@ function AppointmentDetail() {
     return new Date(dt).toLocaleString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
+  // Prüfe, ob der aktuelle Benutzer diesen Termin bearbeiten darf
+  const canEditThisAppointment = () => {
+    if (!currentUser || !appointment) return false;
+    
+    // Admins können alles bearbeiten
+    if (currentUser.is_admin || currentUser.is_superuser) return canEdit;
+    
+    // Therapeuten können nur ihre eigenen Termine bearbeiten
+    if (currentUser.is_therapist) {
+      const practitionerName = getPractitionerName();
+      const userFullName = `${currentUser.first_name} ${currentUser.last_name}`;
+      return canEdit && practitionerName === userFullName;
+    }
+    
+    return canEdit;
+  };
+
+  const canDeleteThisAppointment = () => {
+    if (!currentUser || !appointment) return false;
+    
+    // Admins können alles löschen
+    if (currentUser.is_admin || currentUser.is_superuser) return canDelete;
+    
+    // Therapeuten können nur ihre eigenen Termine löschen
+    if (currentUser.is_therapist) {
+      const practitionerName = getPractitionerName();
+      const userFullName = `${currentUser.first_name} ${currentUser.last_name}`;
+      return canDelete && practitionerName === userFullName;
+    }
+    
+    return canDelete;
+  };
+
+  // Prüfe, ob der aktuelle Benutzer diesen Termin als abrechnungsbereit markieren darf
+  const canMarkReadyToBill = () => {
+    if (!currentUser || !appointment) return false;
+    
+    // Nur Termine mit Status "completed" können als abrechnungsbereit markiert werden
+    if (appointment.status !== 'completed') return false;
+    
+    // Admins können alles markieren
+    if (currentUser.is_admin || currentUser.is_superuser) return canEdit;
+    
+    // Therapeuten können nur ihre eigenen Termine markieren
+    if (currentUser.is_therapist) {
+      const practitionerName = getPractitionerName();
+      const userFullName = `${currentUser.first_name} ${currentUser.last_name}`;
+      return canEdit && practitionerName === userFullName;
+    }
+    
+    return canEdit;
+  };
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <Box component="main" sx={{ flexGrow: 1, p: 0 }}>
@@ -150,7 +225,7 @@ function AppointmentDetail() {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="h4">Termin-Details</Typography>
               <Box sx={{ display: 'flex', gap: 2 }}>
-                {appointment.series_identifier && (
+                {appointment?.series_identifier && (
                   <Button
                     variant="outlined"
                     color="primary"
@@ -162,21 +237,35 @@ function AppointmentDetail() {
                 )}
                 {!editMode ? (
                   <>
-                    <Button
-                      variant="contained"
-                      startIcon={<Edit />}
-                      onClick={() => setEditMode(true)}
-                    >
-                      Bearbeiten
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      color="error"
-                      startIcon={<Delete />}
-                      onClick={handleDelete}
-                    >
-                      Löschen
-                    </Button>
+                    {canEditThisAppointment() && (
+                      <Button
+                        variant="contained"
+                        startIcon={<Edit />}
+                        onClick={() => setEditMode(true)}
+                      >
+                        Bearbeiten
+                      </Button>
+                    )}
+                    {canMarkReadyToBill() && (
+                      <Button
+                        variant="contained"
+                        color="success"
+                        startIcon={<Receipt />}
+                        onClick={handleMarkReadyToBill}
+                      >
+                        Abrechnungsbereit
+                      </Button>
+                    )}
+                    {canDeleteThisAppointment() && (
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        startIcon={<Delete />}
+                        onClick={handleDelete}
+                      >
+                        Löschen
+                      </Button>
+                    )}
                   </>
                 ) : (
                   <>
@@ -199,6 +288,16 @@ function AppointmentDetail() {
                 )}
               </Box>
             </Box>
+            
+            {/* Berechtigungshinweis für Therapeuten */}
+            {currentUser?.is_therapist && appointment && (
+              <Alert severity="info" sx={{ mt: 2 }}>
+                {getPractitionerName() === `${currentUser.first_name} ${currentUser.last_name}` 
+                  ? "Dies ist Ihr Termin - Sie können ihn bearbeiten."
+                  : "Dies ist nicht Ihr Termin - Sie können ihn nur anzeigen."
+                }
+              </Alert>
+            )}
           </Paper>
 
           {/* Content */}

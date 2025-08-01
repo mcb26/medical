@@ -18,6 +18,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import UserAvatar from './common/UserAvatar';
 
 function Profile() {
   const [profile, setProfile] = useState(null);
@@ -132,12 +133,11 @@ function Profile() {
         <Grid container spacing={3}>
           {/* Profilkopf */}
           <Grid item xs={12} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <Avatar
-              sx={{ width: 100, height: 100, mr: 3 }}
-              src={profile?.avatar}
-            >
-              <PersonIcon sx={{ fontSize: 60 }} />
-            </Avatar>
+            <UserAvatar
+              size="xlarge"
+              variant="default"
+              sx={{ mr: 3 }}
+            />
             <Box>
               <Typography variant="h4">
                 {profile?.first_name} {profile?.last_name}

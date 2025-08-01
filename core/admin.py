@@ -29,7 +29,9 @@ from .models import (
     WorkingHour,
     Practice,
     Absence,
-
+    UserRole,
+    ModulePermission,
+    UserActivityLog,
 )
 from .services.appointment_series import AppointmentSeriesService
 from .services.bulk_billing_service import BulkBillingService
@@ -441,10 +443,168 @@ class AbsenceAdmin(admin.ModelAdmin):
     class Media:
         js = ('admin/js/absence_form.js',)  # Für dynamische Formularanpassungen
 
+@admin.register(UserRole)
+class UserRoleAdmin(admin.ModelAdmin):
+    list_display = ['name', 'description', 'is_active', 'created_at']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['name', 'description']
+    readonly_fields = ['created_at', 'updated_at']
+    
+    fieldsets = (
+        ('Grunddaten', {
+            'fields': ('name', 'description', 'is_active')
+        }),
+        ('Berechtigungen', {
+            'fields': ('permissions',),
+            'description': 'JSON-Format für Modul-Berechtigungen'
+        }),
+        ('Zeitstempel', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
 
+@admin.register(ModulePermission)
+class ModulePermissionAdmin(admin.ModelAdmin):
+    list_display = [
+        'user', 'module', 'permission', 'granted_by', 'granted_at', 
+        'expires_at', 'is_active', 'is_expired_display'
+    ]
+    list_filter = [
+        'module', 'permission', 'is_active', 'granted_at', 'expires_at'
+    ]
+    search_fields = ['user__username', 'user__first_name', 'user__last_name', 'module']
+    readonly_fields = ['granted_at']
+    date_hierarchy = 'granted_at'
+    
+    fieldsets = (
+        ('Benutzer & Modul', {
+            'fields': ('user', 'module')
+        }),
+        ('Berechtigung', {
+            'fields': ('permission', 'granted_by', 'expires_at', 'is_active')
+        }),
+        ('Zeitstempel', {
+            'fields': ('granted_at',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def is_expired_display(self, obj):
+        """Zeigt an ob die Berechtigung abgelaufen ist"""
+        if obj.is_expired():
+            return '❌ Abgelaufen'
+        return '✅ Gültig'
+    is_expired_display.short_description = 'Status'
+    
+    def get_queryset(self, request):
+        """Optimiert die Datenbankabfrage"""
+        return super().get_queryset(request).select_related('user', 'granted_by')
+
+@admin.register(UserActivityLog)
+class UserActivityLogAdmin(admin.ModelAdmin):
+    list_display = [
+        'user', 'action', 'module', 'object_type', 'timestamp', 'ip_address'
+    ]
+    list_filter = [
+        'action', 'module', 'timestamp', 'ip_address'
+    ]
+    search_fields = [
+        'user__username', 'user__first_name', 'user__last_name', 
+        'description', 'object_type', 'object_id'
+    ]
+    readonly_fields = ['timestamp']
+    date_hierarchy = 'timestamp'
+    
+    fieldsets = (
+        ('Benutzer & Aktion', {
+            'fields': ('user', 'action', 'module')
+        }),
+        ('Objekt', {
+            'fields': ('object_type', 'object_id', 'description')
+        }),
+        ('Technische Details', {
+            'fields': ('ip_address', 'user_agent', 'timestamp'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def has_add_permission(self, request):
+        """Verhindert manuelles Hinzufügen von Log-Einträgen"""
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        """Verhindert Änderungen an Log-Einträgen"""
+        return False
+    
+    def has_delete_permission(self, request, obj=None):
+        """Erlaubt Löschen von Log-Einträgen nur für Superuser"""
+        return request.user.is_superuser
+
+# Inline für ModulePermission
+class ModulePermissionInline(admin.TabularInline):
+    model = ModulePermission
+    fk_name = 'user'  # Spezifiziert welcher ForeignKey verwendet werden soll
+    extra = 0
+    readonly_fields = ['granted_at']
+    fields = ['module', 'permission', 'granted_by', 'expires_at', 'is_active', 'granted_at']
+
+# Erweitere das User-Admin
+class UserAdmin(admin.ModelAdmin):
+    list_display = [
+        'username', 'email', 'first_name', 'last_name', 'role', 'is_admin', 'is_employee',
+        'department', 'is_active', 'is_staff', 'is_superuser', 'date_joined'
+    ]
+    list_filter = [
+        'role', 'is_admin', 'is_employee', 'department', 'is_active', 'is_staff', 
+        'is_superuser', 'date_joined', 'hire_date'
+    ]
+    search_fields = [
+        'username', 'email', 'first_name', 'last_name', 'employee_id', 'department'
+    ]
+    readonly_fields = ['date_joined', 'last_login', 'login_count']
+    
+    fieldsets = (
+        ('Grunddaten', {
+            'fields': ('username', 'email', 'first_name', 'last_name', 'password')
+        }),
+        ('Rolle & Abteilung', {
+            'fields': ('role', 'is_employee', 'employee_id', 'department', 'hire_date', 'supervisor')
+        }),
+        ('Admin-Status', {
+            'fields': ('is_admin',),
+            'description': 'Administratoren haben automatisch alle Berechtigungen'
+        }),
+        ('Status', {
+            'fields': ('is_active', 'is_staff', 'is_superuser', 'is_locked', 'lock_reason')
+        }),
+        ('Theme-Einstellungen', {
+            'fields': ('theme_mode', 'theme_accent_color', 'theme_font_size', 'theme_compact_mode'),
+            'classes': ('collapse',)
+        }),
+        ('Legacy-Berechtigungen', {
+            'fields': (
+                'can_access_patients', 'can_access_appointments', 'can_access_prescriptions',
+                'can_access_treatments', 'can_access_finance', 'can_access_reports',
+                'can_access_settings', 'can_manage_users', 'can_manage_roles'
+            ),
+            'classes': ('collapse',),
+            'description': 'Diese Felder werden durch das neue Berechtigungssystem ersetzt'
+        }),
+        ('Audit-Informationen', {
+            'fields': ('last_login_ip', 'login_count', 'date_joined', 'last_login'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    inlines = [ModulePermissionInline]
+    
+    def get_queryset(self, request):
+        """Optimiert die Datenbankabfrage"""
+        return super().get_queryset(request).select_related('role', 'supervisor')
 
 # Basis Admin-Registrierungen
-admin.site.register(User)
+admin.site.register(User, UserAdmin)
 admin.site.register(Patient)
 admin.site.register(Doctor)
 admin.site.register(Room)

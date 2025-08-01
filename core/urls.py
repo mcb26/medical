@@ -17,7 +17,7 @@ from .views.views import (
     create_appointment_series,
     AbsenceViewSet
 )
-from .views.user_views import UserViewSet
+from .views.user_views import UserViewSet, UserRoleViewSet
 from .views.billing_views import (
     PatientInvoiceListView,
     PatientInvoiceDetailView,
@@ -33,6 +33,7 @@ app_name = 'core'
 router = DefaultRouter()
 # Basis-Routen
 router.register(r'users', UserViewSet)
+router.register(r'user-roles', UserRoleViewSet)
 router.register(r'insurance-provider-groups', InsuranceProviderGroupViewSet)
 router.register(r'insurance-providers', InsuranceProviderViewSet)
 router.register(r'patients', PatientViewSet)
@@ -114,6 +115,7 @@ urlpatterns = [
          BillingCycleViewSet.as_view({'get': 'items'}), 
          name='billing-cycle-items'),
     path('billing-cycles/<int:pk>/export/', export_billing_cycle, name='export-billing-cycle'),
+    path('billing-cycles/bulk/', BulkBillingView.as_view(), name='bulk-billing'),
     
     # Router URLs zuletzt
     path('', include(router.urls)),

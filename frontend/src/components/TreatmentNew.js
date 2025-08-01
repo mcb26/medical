@@ -2,218 +2,184 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import {
-  Box,
-  Paper,
-  Typography,
-  TextField,
-  Button,
-  Grid,
-  Alert,
-  MenuItem,
-  Divider,
-  FormControlLabel,
-  Checkbox
+  Box, Typography, Paper, TextField, Button, MenuItem, Grid, Alert
 } from '@mui/material';
-import {
-  Save as SaveIcon,
-  Cancel as CancelIcon,
-  Home as HomeIcon
-} from '@mui/icons-material';
 
 function TreatmentNew() {
   const navigate = useNavigate();
-  const [error, setError] = useState(null);
   const [categories, setCategories] = useState([]);
   const [formData, setFormData] = useState({
     treatment_name: '',
-    duration_minutes: '',
-    price: '',
     description: '',
+    duration_minutes: 30,
     category: '',
-    insurance_coverage: false,
-    is_active: true,
-    notes: ''
+    is_self_pay: false,
+    self_pay_price: ''
   });
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await api.get('/treatment-categories/');
-        setCategories(response.data);
-      } catch (error) {
-        console.error('Fehler beim Laden der Kategorien:', error);
-        setError('Fehler beim Laden der Kategorien');
-      }
-    };
-
     fetchCategories();
   }, []);
 
+  const fetchCategories = async () => {
+    try {
+      const response = await api.get('/categories/');
+      setCategories(response.data);
+    } catch (error) {
+      setError('Fehler beim Laden der Kategorien');
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    setError(null);
+
     try {
-      setError(null);
+      // Validierung
+      if (!formData.treatment_name.trim()) {
+        throw new Error('Behandlungsname ist erforderlich');
+      }
+      if (!formData.description.trim()) {
+        throw new Error('Beschreibung ist erforderlich');
+      }
+      if (formData.duration_minutes <= 0) {
+        throw new Error('Behandlungsdauer muss größer als 0 sein');
+      }
+      if (formData.is_self_pay && !formData.self_pay_price) {
+        throw new Error('Für Selbstzahler-Behandlungen muss ein Preis angegeben werden');
+      }
+
       const response = await api.post('/treatments/', formData);
-      navigate(`/treatments/${response.data.id}`);
+      alert('Behandlung erfolgreich erstellt!');
+      navigate('/treatments');
     } catch (error) {
-      console.error('Fehler beim Erstellen der Behandlung:', error);
-      setError(error.response?.data?.message || 'Fehler beim Erstellen der Behandlung');
+      const errorMessage = error.response?.data?.message || error.message || 'Fehler beim Erstellen der Behandlung';
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <Box sx={{ p: 3, backgroundColor: '#f5f5f5' }}>
-      <Paper elevation={3} sx={{ p: 3, maxWidth: 1000, mx: 'auto' }}>
-        <Typography variant="h4" sx={{ mb: 3 }}>
-          Neue Behandlung
-        </Typography>
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h4" gutterBottom>
+        Neue Behandlung erstellen
+      </Typography>
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            {error}
-          </Alert>
-        )}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
 
+      <Paper sx={{ p: 3 }}>
         <form onSubmit={handleSubmit}>
           <Grid container spacing={3}>
-            {/* Grunddaten */}
-            <Grid item xs={12}>
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>
-                  Grunddaten
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      required
-                      label="Behandlungsname"
-                      value={formData.treatment_name}
-                      onChange={(e) => setFormData({ ...formData, treatment_name: e.target.value })}
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      select
-                      fullWidth
-                      label="Kategorie"
-                      value={formData.category}
-                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    >
-                      {categories.map((category) => (
-                        <MenuItem key={category.id} value={category.id}>
-                          {category.name}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  </Grid>
-                </Grid>
-              </Paper>
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="Behandlungsname"
+                name="treatment_name"
+                value={formData.treatment_name}
+                onChange={handleChange}
+                fullWidth
+                required
+              />
             </Grid>
-
-            {/* Details */}
-            <Grid item xs={12}>
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>
-                  Details
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      required
-                      type="number"
-                      label="Dauer (Minuten)"
-                      value={formData.duration_minutes}
-                      onChange={(e) => setFormData({ ...formData, duration_minutes: e.target.value })}
-                      inputProps={{ min: 0 }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      required
-                      type="number"
-                      label="Preis (€)"
-                      value={formData.price}
-                      onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                      inputProps={{ min: 0, step: "0.01" }}
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      multiline
-                      rows={4}
-                      label="Beschreibung"
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    />
-                  </Grid>
-                </Grid>
-              </Paper>
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="Kategorie"
+                name="category"
+                value={formData.category}
+                onChange={handleChange}
+                select
+                fullWidth
+              >
+                {categories.map((category) => (
+                  <MenuItem key={category.id} value={category.id}>
+                    {category.name}
+                  </MenuItem>
+                ))}
+              </TextField>
             </Grid>
-
-            {/* Zusätzliche Optionen */}
-            <Grid item xs={12}>
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>
-                  Zusätzliche Optionen
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={12}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={formData.insurance_coverage}
-                          onChange={(e) => setFormData({ ...formData, insurance_coverage: e.target.checked })}
-                        />
-                      }
-                      label="Kassenleistung"
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={formData.is_active}
-                          onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                        />
-                      }
-                      label="Aktiv"
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      multiline
-                      rows={2}
-                      label="Notizen"
-                      value={formData.notes}
-                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    />
-                  </Grid>
-                </Grid>
-              </Paper>
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="Behandlungsdauer (Minuten)"
+                name="duration_minutes"
+                type="number"
+                value={formData.duration_minutes}
+                onChange={handleChange}
+                fullWidth
+                required
+                inputProps={{ min: 1 }}
+              />
             </Grid>
-
-            {/* Aktionsbuttons */}
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="Selbstzahler-Preis (€)"
+                name="self_pay_price"
+                type="number"
+                value={formData.self_pay_price}
+                onChange={handleChange}
+                fullWidth
+                disabled={!formData.is_self_pay}
+                inputProps={{ 
+                  min: 0, 
+                  step: 0.01,
+                  placeholder: formData.is_self_pay ? '0.00' : 'Nur für Selbstzahler'
+                }}
+              />
+            </Grid>
             <Grid item xs={12}>
-              <Box sx={{ mt: 3, display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
-                <Button
-                  variant="outlined"
-                  onClick={() => navigate('/treatments')}
-                  startIcon={<HomeIcon />}
-                >
-                  Zurück
-                </Button>
+              <TextField
+                label="Beschreibung"
+                name="description"
+                value={formData.description}
+                onChange={handleChange}
+                fullWidth
+                multiline
+                rows={4}
+                required
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                <input
+                  type="checkbox"
+                  name="is_self_pay"
+                  checked={formData.is_self_pay}
+                  onChange={handleChange}
+                  id="is_self_pay"
+                />
+                <label htmlFor="is_self_pay">
+                  Selbstzahler-Behandlung (ohne Verordnung möglich)
+                </label>
+              </Box>
+            </Grid>
+            <Grid item xs={12}>
+              <Box sx={{ display: 'flex', gap: 2 }}>
                 <Button
                   type="submit"
                   variant="contained"
-                  color="primary"
-                  startIcon={<SaveIcon />}
+                  disabled={loading}
                 >
-                  Speichern
+                  {loading ? 'Erstelle...' : 'Behandlung erstellen'}
+                </Button>
+                <Button
+                  variant="outlined"
+                  onClick={() => navigate('/treatments')}
+                >
+                  Abbrechen
                 </Button>
               </Box>
             </Grid>

@@ -22,20 +22,20 @@ class BulkBillingService:
                     'insurance_provider': 'AOK',
                     'cycle_id': 123,
                     'appointments_count': 45,
-                    'total_amount': '1234.56'
+                    'total_amount': '1234.56',
+                    'status': 'success'
                 },
                 ...
             ]
         """
         results = []
         
-        # Finde alle Krankenkassen mit abgeschlossenen oder abrechnungsbereiten Terminen
+        # Finde alle Krankenkassen mit abrechnungsbereiten Terminen
         insurance_providers = InsuranceProvider.objects.filter(
             patientinsurance__patient__appointment__appointment_date__date__range=[start_date, end_date],
-            patientinsurance__patient__appointment__status__in=['completed', 'ready_to_bill']
+            patientinsurance__patient__appointment__status='ready_to_bill',
+            patientinsurance__patient__appointment__prescription__isnull=False  # Nur Termine mit Verordnung
         ).distinct()
-
-        print(f"Gefundene Krankenkassen: {[p.name for p in insurance_providers]}")  # Debug-Ausgabe
 
         for provider in insurance_providers:
             try:
@@ -55,18 +55,11 @@ class BulkBillingService:
                     continue
 
                 # Finde alle abrechenbaren Termine für diese Krankenkasse
-                appointments = Appointment.objects.filter(
-                    appointment_date__date__range=[start_date, end_date],
-                    status__in=['completed', 'ready_to_bill'],
-                    prescription__patient_insurance__insurance_provider=provider,
-                    billing_items__isnull=True
-                ).select_related(
-                    'prescription',
-                    'prescription__patient_insurance',
-                    'prescription__treatment_1'
+                appointments = BillingService.get_billable_appointments(
+                    start_date=start_date,
+                    end_date=end_date,
+                    insurance_provider=provider
                 )
-
-                print(f"Gefundene Termine für {provider.name}: {appointments.count()}")  # Debug-Ausgabe
 
                 if not appointments:
                     results.append({
@@ -75,12 +68,6 @@ class BulkBillingService:
                         'message': 'Keine abrechenbaren Termine gefunden'
                     })
                     continue
-
-                # Markiere Termine als abrechnungsbereit
-                for appointment in appointments:
-                    if appointment.status == 'completed':
-                        appointment.status = 'ready_to_bill'
-                        appointment.save()
 
                 # Erstelle neuen Abrechnungszyklus
                 cycle = BillingService.create_billing_cycle(
@@ -92,16 +79,19 @@ class BulkBillingService:
                 # Erstelle Abrechnungspositionen
                 billing_items = BillingService.create_billing_items(cycle, appointments)
 
+                # Aktualisiere die Gesamtbeträge
+                cycle.update_totals()
+
                 results.append({
                     'insurance_provider': provider.name,
                     'status': 'success',
                     'cycle_id': cycle.id,
                     'appointments_count': len(billing_items),
-                    'total_amount': str(cycle.total_amount)
+                    'total_insurance_amount': str(cycle.total_insurance_amount),
+                    'total_patient_copay': str(cycle.total_patient_copay)
                 })
 
             except Exception as e:
-                print(f"Fehler bei {provider.name}: {str(e)}")  # Debug-Ausgabe
                 results.append({
                     'insurance_provider': provider.name,
                     'status': 'error',
@@ -143,6 +133,43 @@ class BulkBillingService:
                 })
 
         return preview
+
+    @staticmethod
+    def create_self_pay_billing_cycle(start_date: date, end_date: date) -> Dict:
+        """
+        Erstellt eine Abrechnung für alle Selbstzahler-Termine im angegebenen Zeitraum.
+        """
+        try:
+            # Finde alle Selbstzahler-Termine
+            appointments = BillingService.get_self_pay_appointments(
+                start_date=start_date,
+                end_date=end_date
+            )
+
+            if not appointments:
+                return {
+                    'status': 'skipped',
+                    'message': 'Keine Selbstzahler-Termine gefunden'
+                }
+
+            # Erstelle Abrechnungspositionen für Selbstzahler
+            billing_items = BillingService.create_self_pay_billing_items(appointments)
+
+            # Berechne Gesamtbetrag
+            total_amount = sum(item.patient_copay for item in billing_items)
+
+            return {
+                'status': 'success',
+                'appointments_count': len(billing_items),
+                'total_amount': str(total_amount),
+                'billing_items': billing_items
+            }
+
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': str(e)
+            }
 
     @staticmethod
     def create_billing_cycle(insurance_provider, start_date, end_date):

@@ -33,6 +33,8 @@ from .models import (
     BillingItem,
     Raetsel,
     Absence,
+    ModulePermission,
+    UserRole,
 )
 
 User = get_user_model()
@@ -53,26 +55,95 @@ class ICDCodeSerializer(serializers.ModelSerializer):
         model = ICDCode
         fields = '__all__'
 
+class UserRoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserRole
+        fields = '__all__'
+
+class ModulePermissionSerializer(serializers.ModelSerializer):
+    module_display = serializers.CharField(source='get_module_display', read_only=True)
+    permission_display = serializers.CharField(source='get_permission_display', read_only=True)
+    granted_by_name = serializers.CharField(source='granted_by.get_full_name', read_only=True)
+    is_expired = serializers.BooleanField(read_only=True)
+    is_valid = serializers.BooleanField(read_only=True)
+    
+    class Meta:
+        model = ModulePermission
+        fields = [
+            'id', 'user', 'module', 'module_display', 'permission', 'permission_display',
+            'granted_by', 'granted_by_name', 'granted_at', 'expires_at', 'is_active',
+            'is_expired', 'is_valid'
+        ]
+        read_only_fields = ['id', 'granted_at']
+
 class UserSerializer(serializers.ModelSerializer):
+    # Neue Felder für Rollen und Berechtigungen
+    role = UserRoleSerializer(read_only=True)
+    role_id = serializers.PrimaryKeyRelatedField(
+        queryset=UserRole.objects.all(),
+        source='role',
+        required=False,
+        allow_null=True
+    )
+    module_permissions = ModulePermissionSerializer(many=True, read_only=True)
+    effective_permissions = serializers.SerializerMethodField()
+    
+    # Theme-Einstellungen
+    theme_mode = serializers.CharField(max_length=20, required=False)
+    theme_accent_color = serializers.CharField(max_length=7, required=False)
+    theme_font_size = serializers.CharField(max_length=20, required=False)
+    theme_compact_mode = serializers.BooleanField(required=False)
+    
+    # Admin-Status
+    is_admin = serializers.BooleanField(required=False)
+    
+    # Therapeut-Status
+    is_therapist = serializers.BooleanField(required=False)
+    
+    # Modul-Zugriffe (Legacy)
+    can_access_patients = serializers.BooleanField(required=False)
+    can_access_appointments = serializers.BooleanField(required=False)
+    can_access_prescriptions = serializers.BooleanField(required=False)
+    can_access_treatments = serializers.BooleanField(required=False)
+    can_access_finance = serializers.BooleanField(required=False)
+    can_access_reports = serializers.BooleanField(required=False)
+    can_access_settings = serializers.BooleanField(required=False)
+    can_manage_users = serializers.BooleanField(required=False)
+    can_manage_roles = serializers.BooleanField(required=False)
+
     class Meta:
         model = User
         fields = [
-            'id',
-            'username',
-            'email',
-            'first_name',
-            'last_name',
-            'role',
-            'department',
-            'default_practitioner',
-            'date_joined',
-            'last_login',
-            'is_active',
-            'is_staff',
-            'is_superuser',
+            'id', 'username', 'email', 'first_name', 'last_name', 'is_active',
+            'date_joined', 'last_login', 'is_staff', 'is_superuser',
+            
+            # Rollen und Berechtigungen
+            'role', 'role_id', 'module_permissions', 'effective_permissions',
+            'custom_permissions', 'is_employee', 'employee_id', 'department',
+            'hire_date', 'supervisor',
+            
+            # Admin-Status
+            'is_admin',
+            
+            # Therapeut-Status
+            'is_therapist',
+            
+            # Modul-Zugriffe (Legacy)
+            'can_access_patients', 'can_access_appointments', 'can_access_prescriptions',
+            'can_access_treatments', 'can_access_finance', 'can_access_reports',
+            'can_access_settings', 'can_manage_users', 'can_manage_roles',
+            
+            # Theme-Einstellungen
+            'theme_mode', 'theme_accent_color', 'theme_font_size', 'theme_compact_mode',
+            
+            # Audit-Felder
+            'last_login_ip', 'login_count', 'is_locked', 'lock_reason'
         ]
-        read_only_fields = ['id', 'date_joined', 'last_login']
+        read_only_fields = ['id', 'date_joined', 'last_login', 'login_count']
 
+    def get_effective_permissions(self, obj):
+        """Gibt alle effektiven Berechtigungen zurück"""
+        return obj.get_effective_permissions()
 
 
 class InsuranceProviderGroupSerializer(serializers.ModelSerializer):
@@ -236,13 +307,46 @@ class AppointmentSeriesSerializer(serializers.Serializer):
 
 class BillingCycleSerializer(serializers.ModelSerializer):
     insurance_provider_name = serializers.CharField(source='insurance_provider.name', read_only=True)
+    total_insurance_amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    total_patient_copay = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     
     class Meta:
         model = BillingCycle
         fields = [
             'id', 'insurance_provider', 'insurance_provider_name',
-            'start_date', 'end_date', 'status', 'total_amount'
+            'start_date', 'end_date', 'status', 'total_amount',
+            'total_insurance_amount', 'total_patient_copay'
         ]
+        read_only_fields = ['id', 'total_amount', 'total_insurance_amount', 'total_patient_copay']
+
+    def validate(self, data):
+        """Validierung der Abrechnungszyklus-Daten"""
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        
+        if start_date and end_date and start_date >= end_date:
+            raise serializers.ValidationError(
+                "Das Enddatum muss nach dem Startdatum liegen."
+            )
+        
+        # Prüfe auf überlappende Abrechnungszyklen
+        insurance_provider = data.get('insurance_provider')
+        if insurance_provider and start_date and end_date:
+            existing_cycles = BillingCycle.objects.filter(
+                insurance_provider=insurance_provider,
+                start_date__lte=end_date,
+                end_date__gte=start_date
+            )
+            if self.instance:
+                existing_cycles = existing_cycles.exclude(pk=self.instance.pk)
+            
+            if existing_cycles.exists():
+                raise serializers.ValidationError(
+                    f"Es existiert bereits ein Abrechnungszyklus für {insurance_provider.name} "
+                    f"im Zeitraum {start_date} bis {end_date}."
+                )
+        
+        return data
 
 class PrescriptionSerializer(serializers.ModelSerializer):
     treatment_1 = serializers.PrimaryKeyRelatedField(queryset=Treatment.objects.all())
@@ -456,3 +560,4 @@ class AbsenceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Absence
         fields = '__all__'
+

@@ -39,6 +39,13 @@ const ProfileEdit = () => {
 	useEffect(() => {
 		const fetchUserData = async () => {
 			try {
+				// Nur laden wenn User eingeloggt ist
+				const token = localStorage.getItem('token');
+				if (!token) {
+					setError('Nicht eingeloggt');
+					return;
+				}
+				
 				const response = await api.get('/users/me/');
 				setUserData(response.data);
 			} catch (error) {

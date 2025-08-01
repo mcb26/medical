@@ -95,6 +95,35 @@ const RoomsCalendar = ({
         navigate(`/appointments/${info.event.id}`);
     };
 
+    const handleEventDelete = async (eventId) => {
+        if (window.confirm('Diesen Termin wirklich löschen?')) {
+            try {
+                await api.delete(`/appointments/${eventId}/`);
+                fetchEvents(); // Events neu laden
+            } catch (error) {
+                console.error('Fehler beim Löschen des Termins:', error);
+                alert('Fehler beim Löschen des Termins');
+            }
+        }
+    };
+
+    const handleEventMarkReadyToBill = async (event) => {
+        if (window.confirm('Termin als abrechnungsbereit markieren?')) {
+            try {
+                const updatedAppointment = { 
+                    ...event.extendedProps, 
+                    status: 'ready_to_bill' 
+                };
+                await api.put(`/appointments/${event.id}/`, updatedAppointment);
+                fetchEvents(); // Events neu laden
+                alert('Termin wurde als abrechnungsbereit markiert.');
+            } catch (error) {
+                console.error('Fehler beim Markieren als abrechnungsbereit:', error);
+                alert('Fehler beim Markieren als abrechnungsbereit.');
+            }
+        }
+    };
+
     // Handler für Datums-/Zeitauswahl
     const handleDateSelect = (selectionData) => {
         // Erstelle URL-Parameter für das Termin-Erstellungsformular
@@ -123,6 +152,7 @@ const RoomsCalendar = ({
                     treatment_name: ev.treatment_name,
                     patient_name: ev.patient_name,
                     duration_minutes: ev.duration_minutes,
+                    status: ev.status,
                     treatment_color: ev.treatment_color
                 }
             }))}
@@ -135,6 +165,8 @@ const RoomsCalendar = ({
             onEventDrop={handleEventDrop}
             onEventResize={handleEventResize}
             onEventDoubleClick={handleEventDoubleClick}
+            onEventDelete={handleEventDelete}
+            onEventMarkReadyToBill={handleEventMarkReadyToBill}
             onDateSelect={handleDateSelect}
             resourceAreaHeaderContent="Räume"
             columnHeaderFormat={{ weekday: 'short', month: 'numeric', day: 'numeric' }}

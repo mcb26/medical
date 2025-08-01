@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { getUserProfile } from '../services/auth';
+import { usePatientPermissions } from '../hooks/usePermissions';
 import { 
     Box, 
     Paper, 
@@ -21,20 +23,52 @@ const PatientEdit = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [currentUser, setCurrentUser] = useState(null);
+    const [appointments, setAppointments] = useState([]);
+    const { canEdit } = usePatientPermissions();
 
     useEffect(() => {
+        // Lade aktuellen Benutzer
+        const user = getUserProfile();
+        setCurrentUser(user);
+        
         fetchPatient();
     }, [id]);
 
     const fetchPatient = async () => {
         try {
-            const response = await api.get(`patients/${id}/`);
-            setPatient(response.data);
+            const [patientResponse, appointmentsResponse] = await Promise.all([
+                api.get(`patients/${id}/`),
+                api.get(`patients/${id}/appointments/`)
+            ]);
+            setPatient(patientResponse.data);
+            setAppointments(appointmentsResponse.data);
             setLoading(false);
         } catch (err) {
             setError('Fehler beim Laden des Patienten');
             setLoading(false);
         }
+    };
+
+    // Prüfe, ob der aktuelle Benutzer diesen Patienten bearbeiten darf
+    const canEditThisPatient = () => {
+        if (!currentUser || !patient) return false;
+        
+        // Admins können alles bearbeiten
+        if (currentUser.is_admin || currentUser.is_superuser) return canEdit;
+        
+        // Therapeuten können nur ihre eigenen Patienten bearbeiten
+        if (currentUser.is_therapist) {
+            // Prüfe, ob der Patient Termine bei diesem Therapeuten hat
+            const hasAppointmentsWithTherapist = appointments.some(appointment => {
+                const practitionerName = appointment.practitioner_name || '';
+                const userFullName = `${currentUser.first_name} ${currentUser.last_name}`;
+                return practitionerName === userFullName;
+            });
+            return canEdit && hasAppointmentsWithTherapist;
+        }
+        
+        return canEdit;
     };
 
     const handleChange = (e) => {
@@ -46,6 +80,13 @@ const PatientEdit = () => {
         e.preventDefault();
         setError('');
         setSuccess('');
+        
+        // Prüfe Berechtigung vor dem Speichern
+        if (!canEditThisPatient()) {
+            setError('Sie haben keine Berechtigung, diesen Patienten zu bearbeiten.');
+            return;
+        }
+        
         try {
             await api.put(`patients/${id}/`, patient);
             setSuccess('Patient erfolgreich gespeichert');
@@ -61,6 +102,29 @@ const PatientEdit = () => {
 
     if (!patient) {
         return <Alert severity="error">Patient nicht gefunden</Alert>;
+    }
+
+    // Zeige Warnung, wenn der Benutzer keine Berechtigung hat
+    if (!canEditThisPatient()) {
+        return (
+            <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+                <Box component="main" sx={{ flexGrow: 1, p: 0 }}>
+                    <Box sx={{ mx: 0 }}>
+                        <Paper elevation={3} sx={{ p: 3, mb: 3, borderRadius: 2, backgroundColor: '#f5f5f5' }}>
+                            <Alert severity="warning" sx={{ mb: 2 }}>
+                                Sie haben keine Berechtigung, diesen Patienten zu bearbeiten.
+                            </Alert>
+                            <Button
+                                variant="outlined"
+                                onClick={() => navigate(`/patients/${id}`)}
+                            >
+                                Zurück zur Detailansicht
+                            </Button>
+                        </Paper>
+                    </Box>
+                </Box>
+            </Box>
+        );
     }
 
     return (

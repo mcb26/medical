@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../api/axios';
-import { isAuthenticated } from '../services/auth';
+import { isAuthenticated, getUserProfile } from '../services/auth';
+import { usePatientPermissions } from '../hooks/usePermissions';
 import {
   Box,
   Container,
@@ -79,6 +80,8 @@ function PatientDetail() {
   const [error, setError] = useState(null);
   const [insuranceGroups, setInsuranceGroups] = useState([]);
   const [tabValue, setTabValue] = useState(0);
+  const [currentUser, setCurrentUser] = useState(null);
+  const { canEdit, canDelete } = usePatientPermissions();
 
   // State für expandierte/kollabierte Karten
   const [expanded, setExpanded] = useState({
@@ -129,10 +132,47 @@ function PatientDetail() {
       return;
     }
 
+    // Lade aktuellen Benutzer
+    const user = getUserProfile();
+    setCurrentUser(user);
+
     if (id) {
       fetchData();
     }
   }, [id, navigate]);
+
+  // Prüfe, ob der aktuelle Benutzer diesen Patienten bearbeiten darf
+  const canEditThisPatient = () => {
+    if (!currentUser || !patient) return false;
+    
+    // Admins können alles bearbeiten
+    if (currentUser.is_admin || currentUser.is_superuser) return canEdit;
+    
+    // Therapeuten können nur ihre eigenen Patienten bearbeiten
+    if (currentUser.is_therapist) {
+      // Prüfe, ob der Patient Termine bei diesem Therapeuten hat
+      const hasAppointmentsWithTherapist = appointments.some(appointment => {
+        const practitionerName = appointment.practitioner_name || '';
+        const userFullName = `${currentUser.first_name} ${currentUser.last_name}`;
+        return practitionerName === userFullName;
+      });
+      return canEdit && hasAppointmentsWithTherapist;
+    }
+    
+    return canEdit;
+  };
+
+  const canDeleteThisPatient = () => {
+    if (!currentUser || !patient) return false;
+    
+    // Admins können alles löschen
+    if (currentUser.is_admin || currentUser.is_superuser) return canDelete;
+    
+    // Therapeuten können Patienten nicht löschen
+    if (currentUser.is_therapist) return false;
+    
+    return canDelete;
+  };
 
   // Toggle-Funktion für Expand/Collapse
   const handleExpandClick = (section) => {
@@ -229,16 +269,28 @@ function PatientDetail() {
                   </Box>
                 </Grid>
                 <Grid item>
-                  <Button
-                    variant="contained"
-                    startIcon={<Edit />}
-                    onClick={() => navigate(`/patients/${id}/edit`)}
-                  >
-                    Bearbeiten
-                  </Button>
+                  {canEditThisPatient() && (
+                    <Button
+                      variant="contained"
+                      startIcon={<Edit />}
+                      onClick={() => navigate(`/patients/${id}/edit`)}
+                    >
+                      Bearbeiten
+                    </Button>
+                  )}
                 </Grid>
               </Grid>
             </Paper>
+
+            {/* Berechtigungshinweis für Therapeuten */}
+            {currentUser?.is_therapist && patient && (
+              <Alert severity="info" sx={{ mb: 3 }}>
+                {canEditThisPatient() 
+                  ? "Dies ist Ihr Patient - Sie können ihn bearbeiten."
+                  : "Dies ist nicht Ihr Patient - Sie können ihn nur anzeigen."
+                }
+              </Alert>
+            )}
 
             {/* Quick Stats */}
             <Grid container spacing={3} sx={{ mb: 3 }}>
