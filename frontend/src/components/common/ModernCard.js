@@ -13,7 +13,7 @@ import {
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 
-const StyledCard = styled(Card)(({ theme, variant, elevation = 1 }) => ({
+const StyledCard = styled(Card)(({ theme, variant }) => ({
   borderRadius: 16,
   border: '1px solid',
   borderColor: theme.palette.divider,
@@ -148,7 +148,6 @@ const StyledCardActions = styled(CardActions)(({ theme }) => ({
 const ModernCard = ({
   children,
   variant = 'elevated',
-  elevation = 1,
   title,
   subtitle,
   action,
@@ -172,7 +171,6 @@ const ModernCard = ({
   return (
     <StyledCard
       variant={variant}
-      elevation={elevation}
       onClick={handleClick}
       sx={{
         ...sx,

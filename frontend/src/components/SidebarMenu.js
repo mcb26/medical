@@ -1,17 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Drawer, 
-  List, 
-  ListItemIcon, 
-  ListItemText, 
-  ListItemButton, 
+import {
+  Drawer,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  ListItemSecondaryAction,
+  Tooltip,
   Box,
-  Typography,
   Divider,
   useTheme,
   useMediaQuery,
-  Tooltip,
-  Avatar
+  Badge,
+  IconButton,
+  Collapse,
+  Typography
 } from '@mui/material';
 import {
   Home as HomeIcon,
@@ -20,133 +24,179 @@ import {
   People as PeopleIcon,
   Feed as FeedIcon,
   Spa as SpaIcon,
-  Medication as MedicationIcon,
-  Leaderboard as LeaderboardIcon,
-  TableChart as TableChartIcon,
   Euro as EuroIcon,
-  Business as BusinessIcon,
-  LocalHospital as HospitalIcon,
-  Assessment as AssessmentIcon,
+  Schedule as ScheduleIcon,
   Notifications as NotificationsIcon,
   AdminPanelSettings as AdminIcon,
+  Assessment as AssessmentIcon,
+  TableChart as TableChartIcon,
+  Settings as SettingsIcon,
+  ExpandLess,
+  ExpandMore,
+  KeyboardArrowRight as ArrowRightIcon
 } from '@mui/icons-material';
-import { Link, useLocation } from 'react-router-dom';
-import { getUserInitials, getUserFullName } from '../services/auth';
-import UserAvatar from './common/UserAvatar';
-import { useAdminPermissions } from '../hooks/usePermissions';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { usePermissions } from '../hooks/usePermissions';
 
 function SidebarMenu({ drawerOpen, toggleDrawer }) {
   const theme = useTheme();
+  const navigate = useNavigate();
   const location = useLocation();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const [userInitials, setUserInitials] = useState('U');
-  const [userFullName, setUserFullName] = useState('Unbekannter Benutzer');
-  const { canAccessAdminPanel } = useAdminPermissions();
+  const { permissions, hasPermission } = usePermissions();
+  const [expandedItems, setExpandedItems] = useState({});
 
-  const menuItems = [
-    {
-      text: 'Dashboard',
-      icon: <HomeIcon />,
-      path: '/',
-      description: 'Übersicht und Statistiken'
-    },
-    {
-      text: 'Kalender',
-      icon: <CalendarIcon />,
-      path: '/calendar',
-      description: 'Terminplanung und Übersicht'
-    },
-    {
-      text: 'Termine',
-      icon: <EventIcon />,
-      path: '/appointments',
-      description: 'Terminverwaltung'
-    },
-    {
-      text: 'Patienten',
-      icon: <PeopleIcon />,
-      path: '/patients',
-      description: 'Patientendaten verwalten'
-    },
-    {
-      text: 'Verordnungen',
-      icon: <FeedIcon />,
-      path: '/prescriptions',
-      description: 'Verordnungen und Rezepte'
-    },
-    {
-      text: 'Heilmittel',
-      icon: <MedicationIcon />,
-      path: '/treatments',
-      description: 'Behandlungen und Therapien'
-    },
-    {
-      text: 'Krankenkassen',
-      icon: <SpaIcon />,
-      path: '/insurance-management',
-      description: 'Versicherungsverwaltung'
-    },
-    {
-      text: 'Finanzen',
-      icon: <EuroIcon />,
-      path: '/finance',
-      description: 'Finanzübersicht und Abrechnung'
-    },
-    {
-      text: 'Benachrichtigungen',
-      icon: <NotificationsIcon />,
-      path: '/notifications',
-      description: 'Benachrichtigungen verwalten'
-    },
-    // Admin-Panel nur für Admins sichtbar
-    ...(canAccessAdminPanel ? [{
-      text: 'Admin-Panel',
-      icon: <AdminIcon />,
-      path: '/admin-panel',
-      description: 'Globale Benutzerverwaltung und Systemeinstellungen'
-    }] : []),
-    {
-      text: 'Abrechnungen',
-      icon: <AssessmentIcon />,
-      path: '/billing-cycles',
-      description: 'Abrechnungszyklen'
-    },
-    {
-      text: 'Daten',
-      icon: <TableChartIcon />,
-      path: '/dataoverview',
-      description: 'Datenanalyse und Berichte'
-    },
-    {
-      text: 'Praxis',
-      icon: <BusinessIcon />,
-      path: '/practice',
-      description: 'Praxiseinstellungen'
-    },
-  ];
-
-  // Benutzerinformationen beim Mounten laden
+  // Event Listener für Permissions-Updates
   useEffect(() => {
-    const loadUserInfo = () => {
-      const initials = getUserInitials();
-      const fullName = getUserFullName();
-      setUserInitials(initials);
-      setUserFullName(fullName);
+    const handlePermissionsUpdate = () => {
+      // Permissions wurden aktualisiert
     };
 
-    loadUserInfo();
-    
-    // Event Listener für Storage-Änderungen
-    const handleStorageChange = (e) => {
-      if (e.key === 'userProfile') {
-        loadUserInfo();
-      }
+    window.addEventListener('permissions-updated', handlePermissionsUpdate);
+    return () => {
+      window.removeEventListener('permissions-updated', handlePermissionsUpdate);
     };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
+  // Verbesserte Menü-Struktur mit Gruppierung
+  const menuItems = [
+    {
+      group: 'Hauptfunktionen',
+      items: [
+        {
+          text: 'Dashboard',
+          icon: <HomeIcon />,
+          path: '/',
+          description: 'Übersicht und Statistiken',
+          badge: null
+        },
+        {
+          text: 'Kalender',
+          icon: <CalendarIcon />,
+          path: '/calendar',
+          description: 'Terminplanung und Übersicht',
+          badge: null
+        },
+        {
+          text: 'Termine',
+          icon: <EventIcon />,
+          path: '/appointments',
+          description: 'Terminverwaltung',
+          badge: null
+        }
+      ]
+    },
+    {
+      group: 'Patientenverwaltung',
+      items: [
+        {
+          text: 'Patienten',
+          icon: <PeopleIcon />,
+          path: '/patients',
+          description: 'Patientendaten verwalten',
+          badge: null
+        },
+        {
+          text: 'Verordnungen',
+          icon: <FeedIcon />,
+          path: '/prescriptions',
+          description: 'Verordnungen und Rezepte',
+          badge: null
+        },
+        {
+          text: 'Heilmittel',
+          icon: <SpaIcon />,
+          path: '/treatments',
+          description: 'Behandlungen und Therapien',
+          badge: null
+        }
+      ]
+    },
+    {
+      group: 'Verwaltung',
+      items: [
+        {
+          text: 'Krankenkassen',
+          icon: <SpaIcon />,
+          path: '/insurance-management',
+          description: 'Versicherungsverwaltung',
+          badge: null
+        },
+        {
+          text: 'Finanzen',
+          icon: <EuroIcon />,
+          path: '/finance',
+          description: 'Finanzübersicht und Abrechnung',
+          badge: null
+        },
+        {
+          text: 'Abrechnungen',
+          icon: <AssessmentIcon />,
+          path: '/billing-cycles',
+          description: 'Abrechnungszyklen',
+          badge: null
+        }
+      ]
+    },
+    {
+      group: 'System',
+      items: [
+        {
+          text: 'Absagen-Management',
+          icon: <ScheduleIcon />,
+          path: '/waitlist',
+          description: 'Warteliste für Terminabsagen',
+          badge: null
+        },
+        {
+          text: 'Benachrichtigungen',
+          icon: <NotificationsIcon />,
+          path: '/notifications',
+          description: 'Benachrichtigungen verwalten',
+          badge: null
+        },
+        {
+          text: 'Admin-Panel',
+          icon: <AdminIcon />,
+          path: '/admin-panel',
+          description: 'Globale Benutzerverwaltung und Systemeinstellungen',
+          badge: null
+        },
+        {
+          text: 'Daten',
+          icon: <TableChartIcon />,
+          path: '/dataoverview',
+          description: 'Datenübersicht und Analysen',
+          badge: null
+        },
+        {
+          text: 'Einstellungen',
+          icon: <SettingsIcon />,
+          path: '/settings',
+          description: 'Systemeinstellungen',
+          badge: null
+        }
+      ]
+    }
+  ];
+
+  // Toggle für expandierte Menü-Items
+  const handleExpandToggle = (groupName) => {
+    setExpandedItems(prev => ({
+      ...prev,
+      [groupName]: !prev[groupName]
+    }));
+  };
+
+  // Navigation-Handler
+  const handleNavigation = (path) => {
+    navigate(path);
+    if (isMobile) {
+      toggleDrawer(); // Schließe Sidebar auf Mobile
+    }
+  };
+
+  // Prüfe ob ein Menü-Item aktiv ist
   const isActive = (path) => {
     if (path === '/') {
       return location.pathname === '/';
@@ -154,139 +204,201 @@ function SidebarMenu({ drawerOpen, toggleDrawer }) {
     return location.pathname.startsWith(path);
   };
 
-  const drawerContent = (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            {/* Header */}
-      <Box sx={{ 
-        p: 3, 
-        textAlign: 'center',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        color: 'white'
-      }}>
-        <UserAvatar 
-          size="large"
-          variant="sidebar"
-          showTooltip={false}
-          sx={{ 
-            mx: 'auto', 
-            mb: 2,
-          }}
-        />
-        <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
-          MediCal
-        </Typography>
-        <Typography variant="body2" sx={{ opacity: 0.9, mb: 0.5 }}>
-          {userFullName}
-        </Typography>
-        <Typography variant="caption" sx={{ opacity: 0.8 }}>
-          Praxisverwaltung
-        </Typography>
-      </Box>
+  // Prüfe Berechtigungen für ein Menü-Item
+  const hasAccess = (item) => {
+    // Dashboard ist immer verfügbar
+    if (item.path === '/') return true;
+    
+    // Mapping von Pfaden zu Berechtigungen
+    const permissionMap = {
+      '/calendar': ['appointments', 'read'],
+      '/appointments': ['appointments', 'read'],
+      '/patients': ['patients', 'read'],
+      '/prescriptions': ['prescriptions', 'read'],
+      '/treatments': ['treatments', 'read'],
+      '/insurance-management': ['insurance', 'read'],
+      '/finance': ['finance', 'read'],
+      '/billing-cycles': ['billing', 'read'],
+      '/waitlist': ['appointments', 'read'],
+      '/notifications': ['notifications', 'read'],
+      '/admin-panel': ['users', 'read'],
+      '/dataoverview': ['reports', 'read'],
+      '/settings': ['settings', 'read']
+    };
 
-      <Divider />
-
-      {/* Menu Items */}
-      <List sx={{
-        flexGrow: 1,
-        py: 1,
-        backgroundColor: theme.palette.background.paper,
-      }}>
-        {menuItems.map((item, index) => {
-          const active = isActive(item.path);
-          return (
-            <Tooltip
-              key={index}
-              title={isMobile ? item.description : ''}
-              placement="right"
-              arrow
-            >
-              <ListItemButton
-                component={Link}
-                to={item.path}
-                onClick={toggleDrawer}
-                sx={{
-                  mx: 1,
-                  mb: 0.5,
-                  borderRadius: 2,
-                  backgroundColor: active ? theme.palette.primary[50] : 'transparent',
-                  color: active ? theme.palette.primary.main : theme.palette.text.primary,
-                  border: active ? `1px solid ${theme.palette.primary[200]}` : '1px solid transparent',
-                  '&:hover': {
-                    backgroundColor: active ? theme.palette.primary[100] : theme.palette.grey[50],
-                    transform: 'translateX(4px)',
-                  },
-                  transition: 'all 0.2s ease-in-out',
-                  '& .MuiListItemIcon-root': {
-                    color: active ? theme.palette.primary.main : theme.palette.text.secondary,
-                  },
-                  '& .MuiListItemText-primary': {
-                    fontWeight: active ? 600 : 500,
-                  },
-                }}
-              >
-                <ListItemIcon sx={{
-                  minWidth: 40,
-                  '& .MuiSvgIcon-root': {
-                    fontSize: '1.25rem',
-                  }
-                }}>
-                  {item.icon}
-                </ListItemIcon>
-                <ListItemText
-                  primary={item.text}
-                  secondary={!isMobile && item.description}
-                  primaryTypographyProps={{
-                    fontSize: '0.875rem',
-                    fontWeight: active ? 600 : 500,
-                  }}
-                  secondaryTypographyProps={{
-                    fontSize: '0.75rem',
-                    color: theme.palette.text.secondary,
-                    display: isMobile ? 'none' : 'block',
-                  }}
-                />
-              </ListItemButton>
-            </Tooltip>
-          );
-        })}
-      </List>
-
-      {/* Footer */}
-      <Box sx={{
-        p: 2,
-        borderTop: `1px solid ${theme.palette.divider}`,
-        backgroundColor: theme.palette.grey[50],
-      }}>
-        <Typography variant="caption" sx={{
-          color: theme.palette.text.secondary,
-          textAlign: 'center',
-          display: 'block',
-        }}>
-          Version 2.0.0
-        </Typography>
-      </Box>
-    </Box>
-  );
+    const [module, action] = permissionMap[item.path] || ['general', 'read'];
+    return hasPermission(module, action);
+  };
 
   return (
     <Drawer
+      variant={isMobile ? "temporary" : "persistent"}
       open={drawerOpen}
       onClose={toggleDrawer}
-      variant={isMobile ? "temporary" : "persistent"}
       sx={{
+        width: drawerOpen ? 320 : 0,
+        flexShrink: 0,
         '& .MuiDrawer-paper': {
-          width: { xs: 280, sm: 320 },
+          width: 320,
           boxSizing: 'border-box',
-          borderRight: 'none',
-          background: theme.palette.background.paper,
-          boxShadow: '2px 0 8px rgba(0, 0, 0, 0.1)',
-          // Abstand für die HeaderBar hinzufügen
-          top: { xs: 56, sm: 64 },
-          height: { xs: 'calc(100% - 56px)', sm: 'calc(100% - 64px)' },
+          backgroundColor: theme.palette.background.paper,
+          borderRight: `1px solid ${theme.palette.divider}`,
+          overflowX: 'hidden',
+          transition: theme.transitions.create(['width'], {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.enteringScreen,
+          }),
         },
       }}
     >
-      {drawerContent}
+      <Box sx={{ overflow: 'auto', height: '100%' }}>
+        {/* Logo/Branding Bereich */}
+        <Box
+          sx={{
+            p: 2,
+            borderBottom: `1px solid ${theme.palette.divider}`,
+            backgroundColor: theme.palette.primary.main,
+            color: theme.palette.primary.contrastText,
+          }}
+        >
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            MediCal
+          </Typography>
+          <Typography variant="body2" sx={{ opacity: 0.8 }}>
+            Praxisverwaltung
+          </Typography>
+        </Box>
+
+        {/* Menü-Items */}
+        <List sx={{ pt: 1 }}>
+          {menuItems.map((group, groupIndex) => (
+            <Box key={groupIndex}>
+              {/* Gruppen-Header */}
+              <Box
+                sx={{
+                  px: 2,
+                  py: 1,
+                  backgroundColor: theme.palette.grey[50],
+                  borderBottom: `1px solid ${theme.palette.divider}`,
+                }}
+              >
+                <Typography
+                  variant="overline"
+                  sx={{
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    color: theme.palette.text.secondary,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                  }}
+                >
+                  {group.group}
+                </Typography>
+              </Box>
+
+              {/* Gruppen-Items */}
+              <Collapse in={expandedItems[group.group] !== false}>
+                {group.items.map((item, itemIndex) => {
+                  const isItemActive = isActive(item.path);
+                  const hasItemAccess = hasAccess(item);
+
+                  if (!hasItemAccess) return null;
+
+                  return (
+                    <ListItem
+                      key={itemIndex}
+                      disablePadding
+                      sx={{
+                        '&:hover': {
+                          backgroundColor: theme.palette.action.hover,
+                        },
+                      }}
+                    >
+                      <Tooltip
+                        title={item.description}
+                        placement="right"
+                        arrow
+                        disableHoverListener={drawerOpen}
+                      >
+                        <ListItemButton
+                          onClick={() => handleNavigation(item.path)}
+                          selected={isItemActive}
+                          sx={{
+                            pl: 3,
+                            pr: 2,
+                            py: 1.5,
+                            minHeight: 48,
+                            '&.Mui-selected': {
+                              backgroundColor: theme.palette.primary.light,
+                              color: theme.palette.primary.contrastText,
+                              '&:hover': {
+                                backgroundColor: theme.palette.primary.main,
+                              },
+                              '& .MuiListItemIcon-root': {
+                                color: theme.palette.primary.contrastText,
+                              },
+                            },
+                            '&:hover': {
+                              backgroundColor: theme.palette.action.hover,
+                            },
+                          }}
+                        >
+                          <ListItemIcon
+                            sx={{
+                              minWidth: 40,
+                              color: isItemActive 
+                                ? theme.palette.primary.contrastText 
+                                : theme.palette.text.secondary,
+                            }}
+                          >
+                            {item.icon}
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={item.text}
+                            primaryTypographyProps={{
+                              fontSize: '0.875rem',
+                              fontWeight: isItemActive ? 600 : 400,
+                            }}
+                          />
+                          {item.badge && (
+                            <ListItemSecondaryAction>
+                              <Badge
+                                badgeContent={item.badge}
+                                color="error"
+                                sx={{
+                                  '& .MuiBadge-badge': {
+                                    fontSize: '0.75rem',
+                                    minWidth: 20,
+                                    height: 20,
+                                  },
+                                }}
+                              />
+                            </ListItemSecondaryAction>
+                          )}
+                          {isItemActive && (
+                            <ArrowRightIcon
+                              sx={{
+                                fontSize: 16,
+                                color: theme.palette.primary.contrastText,
+                                ml: 1,
+                              }}
+                            />
+                          )}
+                        </ListItemButton>
+                      </Tooltip>
+                    </ListItem>
+                  );
+                })}
+              </Collapse>
+
+              {/* Divider zwischen Gruppen */}
+              {groupIndex < menuItems.length - 1 && (
+                <Divider sx={{ my: 1 }} />
+              )}
+            </Box>
+          ))}
+        </List>
+      </Box>
     </Drawer>
   );
 }

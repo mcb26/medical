@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import FullCalendar from '@fullcalendar/react';
 import resourceTimeGridPlugin from '@fullcalendar/resource-timegrid';
 import resourceTimelinePlugin from '@fullcalendar/resource-timeline';
@@ -6,8 +7,8 @@ import interactionPlugin from '@fullcalendar/interaction';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import deLocale from '@fullcalendar/core/locales/de';
-import { Menu, MenuItem, ListItemIcon, ListItemText } from '@mui/material';
-import { Receipt, Edit, Delete, Visibility } from '@mui/icons-material';
+import { Menu, MenuItem, ListItemIcon, ListItemText, Box } from '@mui/material';
+import { Receipt, Edit, Delete, Visibility, Event, Block } from '@mui/icons-material';
 
 const plugins = [
     resourceTimeGridPlugin,
@@ -16,7 +17,7 @@ const plugins = [
     timeGridPlugin
 ];
 
-// CSS für Pausenzeiten
+// CSS für Pausenzeiten und verbesserte Event-Darstellung
 const breakEventStyles = `
     .break-event {
         background-color: #ff9800 !important;
@@ -35,37 +36,350 @@ const breakEventStyles = `
         color: white !important;
         font-weight: bold !important;
     }
+    
+    /* Verbesserte Event-Darstellung */
+    .fc-event {
+        border-radius: 4px !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.12) !important;
+    }
+    
+    .fc-event-main-frame {
+        padding: 1px 3px !important;
+        min-height: 16px !important;
+    }
+    
+    .fc-event-title-container {
+        overflow: hidden !important;
+    }
+    
+    .fc-event-title {
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        hyphens: auto !important;
+    }
+    
+    /* Responsive Text-Größen */
+    .fc-timegrid-event {
+        font-size: 0.85em !important;
+    }
+    
+    .fc-daygrid-event {
+        font-size: 0.8em !important;
+    }
+    
+    /* Hover-Effekte */
+    .fc-event:hover {
+        box-shadow: 0 2px 6px rgba(0,0,0,0.2) !important;
+        transform: translateY(-1px) !important;
+        transition: all 0.2s ease !important;
+    }
+    
+    /* Kalender-Layout Optimierungen */
+    .fc {
+        height: calc(100vh - 200px) !important;
+        min-height: 600px !important;
+    }
+    
+    .fc-view-harness {
+        height: 100% !important;
+    }
+    
+    /* Kompaktere Header */
+    .fc-col-header {
+        height: 40px !important;
+    }
+    
+    .fc-col-header-cell {
+        padding: 4px 2px !important;
+        font-size: 0.85em !important;
+    }
+    
+    /* Kompaktere Zeitslots */
+    .fc-timegrid-slot {
+        height: 25px !important;
+    }
+    
+    .fc-timegrid-slot-label {
+        font-size: 0.7em !important;
+        padding: 1px 3px !important;
+    }
+    
+    /* Kompaktere Ressourcen-Bereiche */
+    .fc-resource-timeline-divider {
+        width: 1px !important;
+    }
+    
+    .fc-resource-timeline-header {
+        height: 35px !important;
+    }
+    
+    .fc-resource-timeline-header-cell {
+        padding: 3px 4px !important;
+        font-size: 0.8em !important;
+    }
+    
+    /* Kompaktere Ressourcen-Bereiche */
+    .fc-resource-timeline-divider {
+        width: 1px !important;
+    }
+    
+    .fc-resource-timeline-header {
+        height: 40px !important;
+    }
+    
+    .fc-resource-timeline-header-cell {
+        padding: 4px 6px !important;
+        font-size: 0.85em !important;
+    }
+    
+    /* Kompaktere Event-Darstellung */
+    .fc-timegrid-event-harness {
+        margin: 0.5px 0 !important;
+    }
+    
+    .fc-daygrid-event-harness {
+        margin: 0.5px 0 !important;
+    }
+    
+    /* Kompaktere Event-Container */
+    .fc-event-title-container {
+        padding: 0 !important;
+    }
+    
+    .fc-event-title {
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    
+    /* AllDay-Slot kompakter */
+    .fc-daygrid-day-events {
+        min-height: 20px !important;
+    }
+    
+    .fc-daygrid-event-dot {
+        margin: 1px 2px !important;
+    }
+    
+    /* Scrollbar-Optimierung */
+    .fc-scroller {
+        scrollbar-width: thin !important;
+    }
+    
+    .fc-scroller::-webkit-scrollbar {
+        width: 6px !important;
+        height: 6px !important;
+    }
+    
+    .fc-scroller::-webkit-scrollbar-track {
+        background: #f1f1f1 !important;
+    }
+    
+    .fc-scroller::-webkit-scrollbar-thumb {
+        background: #c1c1c1 !important;
+        border-radius: 3px !important;
+    }
+    
+    .fc-scroller::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8 !important;
+    }
+    
+    /* Mobile Optimierungen */
+    @media (max-width: 768px) {
+        .fc {
+            height: calc(100vh - 150px) !important;
+            min-height: 500px !important;
+        }
+        
+        .fc-col-header-cell {
+            font-size: 0.75em !important;
+            padding: 2px 1px !important;
+        }
+        
+        .fc-timegrid-slot {
+            height: 25px !important;
+        }
+        
+        .fc-timegrid-slot-label {
+            font-size: 0.7em !important;
+        }
+        
+        .fc-event {
+            font-size: 0.75em !important;
+        }
+    }
 `;
 
 const renderEventContent = (eventInfo) => {
-    const { treatment_name, patient_name, duration_minutes, isBreak } = eventInfo.event.extendedProps;
+    const { 
+        treatment_name, 
+        patient_name, 
+        isBreak, 
+        isAbsence, 
+        absence_type, 
+        notes,
+        practitioner_name,
+        room_name
+    } = eventInfo.event.extendedProps;
+    
+    // Berechne Event-Höhe für adaptive Darstellung
+    const eventHeight = eventInfo.el?.offsetHeight || 16;
+    const isCompact = eventHeight < 30;
+    const isVeryCompact = eventHeight < 20;
+    
+    // Bestimme den Kontext basierend auf der Ressource
+    const resourceId = eventInfo.event.getResources()[0]?.id || '';
+    const isPractitionerView = resourceId.startsWith('practitioner-');
+    const isRoomView = resourceId.startsWith('room-');
     
     // Spezielle Darstellung für Pausenzeiten
     if (isBreak) {
         return (
             <div className="fc-event-main-frame">
                 <div className="fc-event-title-container">
-                    <div className="fc-event-title fc-sticky">
-                        ⏸️ Pause
+                    <div className="fc-event-title fc-sticky" style={{
+                        fontSize: isVeryCompact ? '0.7em' : '0.8em',
+                        lineHeight: '1.1',
+                        fontWeight: 'bold',
+                        color: 'white'
+                    }}>
+                        {isVeryCompact ? '⏸️' : '⏸️ Pause'}
                     </div>
                 </div>
             </div>
         );
     }
     
-    // Normale Darstellung für Termine
-    return (
-        <div className="fc-event-main-frame">
-            <div className="fc-event-title-container">
-                <div className="fc-event-title fc-sticky">
-                    {treatment_name}
-                </div>
-                <div style={{ fontSize: '0.85em', color: '#333' }}>
-                    {patient_name && <div> {patient_name}</div>}
+    // Spezielle Darstellung für Abwesenheiten
+    if (isAbsence) {
+        const absenceTypeMap = {
+            'vacation': 'Urlaub',
+            'sick': 'Krankheit',
+            'parental_leave': 'Elternzeit',
+            'special_leave': 'Sonderurlaub',
+            'training': 'Fortbildung',
+            'other': 'Sonstiges'
+        };
+        
+        const absenceTypeDisplay = absenceTypeMap[absence_type] || absence_type;
+        
+        return (
+            <div className="fc-event-main-frame">
+                <div className="fc-event-title-container">
+                    <div className="fc-event-title fc-sticky" style={{ 
+                        fontWeight: 'bold', 
+                        color: 'white',
+                        fontSize: isVeryCompact ? '0.7em' : '0.8em',
+                        lineHeight: '1.1',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                    }}>
+                        {isVeryCompact ? absenceTypeDisplay.substring(0, 8) : absenceTypeDisplay}
+                    </div>
+                    {notes && !isVeryCompact && (
+                        <div style={{ 
+                            fontSize: '0.65em', 
+                            color: 'white', 
+                            opacity: 0.9,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                        }}>
+                            {notes}
+                        </div>
+                    )}
                 </div>
             </div>
-        </div>
-    );
+        );
+    }
+    
+    // Normale Darstellung für Termine - adaptive Formatierung
+    if (isVeryCompact) {
+        // Sehr kompakte Darstellung für kleine Events
+        const treatmentShort = treatment_name?.substring(0, 6) || 'Termin';
+        const contextInfo = isPractitionerView && room_name ? 
+            room_name.substring(0, 4) : 
+            isRoomView && practitioner_name ? 
+            practitioner_name.substring(0, 4) : '';
+        
+        return (
+            <div className="fc-event-main-frame">
+                <div className="fc-event-title-container">
+                    <div className="fc-event-title fc-sticky" style={{
+                        fontSize: '0.7em',
+                        lineHeight: '1.1',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        fontWeight: 'bold'
+                    }}>
+                        {treatmentShort}
+                        {contextInfo && <span style={{ color: '#666', fontSize: '0.6em', marginLeft: '2px' }}>
+                            {isPractitionerView ? '🏠' : '👤'} {contextInfo}
+                        </span>}
+                    </div>
+                </div>
+            </div>
+        );
+    } else if (isCompact) {
+        // Kompakte Darstellung für mittlere Events
+        return (
+            <div className="fc-event-main-frame">
+                <div className="fc-event-title-container">
+                    <div className="fc-event-title fc-sticky" style={{
+                        fontSize: '0.75em',
+                        lineHeight: '1.1',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        fontWeight: 'bold'
+                    }}>
+                        {treatment_name}
+                    </div>
+                    <div style={{ 
+                        fontSize: '0.6em', 
+                        color: '#333',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                    }}>
+                        {patient_name && <div>{patient_name}</div>}
+                        {isPractitionerView && room_name && <div style={{ color: '#666', fontStyle: 'italic' }}>🏠 {room_name}</div>}
+                        {isRoomView && practitioner_name && <div style={{ color: '#666', fontStyle: 'italic' }}>👤 {practitioner_name}</div>}
+                    </div>
+                </div>
+            </div>
+        );
+    } else {
+        // Normale Darstellung für größere Events
+        return (
+            <div className="fc-event-main-frame">
+                <div className="fc-event-title-container">
+                    <div className="fc-event-title fc-sticky" style={{
+                        fontSize: '0.8em',
+                        lineHeight: '1.2',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        fontWeight: 'bold'
+                    }}>
+                        {treatment_name}
+                    </div>
+                    <div style={{ 
+                        fontSize: '0.65em', 
+                        color: '#333',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                    }}>
+                        {patient_name && <div>{patient_name}</div>}
+                        {practitioner_name && <div style={{ color: '#666', fontStyle: 'italic' }}>👤 {practitioner_name}</div>}
+                        {room_name && <div style={{ color: '#666', fontStyle: 'italic' }}>🏠 {room_name}</div>}
+                    </div>
+                </div>
+            </div>
+        );
+    }
 };
 
 // Hilfsfunktion um die Öffnungszeiten für einen bestimmten Tag zu ermitteln
@@ -171,8 +485,11 @@ const BaseCalendar = ({
     resourceType = 'practitioners' // Neu: um zu unterscheiden ob Räume oder Behandler
 }) => {
     const calendarRef = useRef(null);
+    const navigate = useNavigate();
     const [contextMenu, setContextMenu] = useState(null);
     const [selectedEvent, setSelectedEvent] = useState(null);
+    const [dateSelectContextMenu, setDateSelectContextMenu] = useState(null);
+    const [selectedDateData, setSelectedDateData] = useState(null);
 
     useEffect(() => {
         if (calendarRef.current && view) {
@@ -199,17 +516,24 @@ const BaseCalendar = ({
     };
 
     const handleEventRightClick = (info) => {
-        info.jsEvent.preventDefault();
-        setSelectedEvent(info.event);
-        setContextMenu({
-            mouseX: info.jsEvent.clientX,
-            mouseY: info.jsEvent.clientY,
-        });
+        if (info.jsEvent) {
+            info.jsEvent.preventDefault();
+            setSelectedEvent(info.event);
+            setContextMenu({
+                mouseX: info.jsEvent.clientX,
+                mouseY: info.jsEvent.clientY,
+            });
+        }
     };
 
     const handleContextMenuClose = () => {
         setContextMenu(null);
         setSelectedEvent(null);
+    };
+
+    const handleDateSelectContextMenuClose = () => {
+        setDateSelectContextMenu(null);
+        setSelectedDateData(null);
     };
 
     const handleMarkReadyToBill = () => {
@@ -240,27 +564,57 @@ const BaseCalendar = ({
         handleContextMenuClose();
     };
 
-    // Handler für Datums-/Zeitauswahl (Doppelklick auf Zeitpunkt)
+    // Handler für Datums-/Zeitauswahl (Klick auf Zeitpunkt)
     const handleDateSelect = (selectInfo) => {
-        if (onDateSelect) {
-            // Extrahiere die ausgewählte Ressource
-            const selectedResource = selectInfo.resource;
-            const startDate = selectInfo.start;
-            const endDate = selectInfo.end;
-            
-            // Erstelle ein Objekt mit den ausgewählten Daten
-            const selectionData = {
-                start: startDate,
-                end: endDate,
-                resource: selectedResource,
-                resourceType: resourceType,
-                // Extrahiere die Ressourcen-ID (entferne Präfix wie "practitioner-" oder "room-")
-                resourceId: selectedResource ? selectedResource.id.replace(/^(practitioner-|room-)/, '') : null,
-                resourceTitle: selectedResource ? selectedResource.title : null
-            };
-            
-            onDateSelect(selectionData);
+        // Extrahiere die ausgewählte Ressource
+        const selectedResource = selectInfo.resource;
+        const startDate = selectInfo.start;
+        const endDate = selectInfo.end;
+        
+        // Erstelle ein Objekt mit den ausgewählten Daten
+        const selectionData = {
+            start: startDate,
+            end: endDate,
+            resource: selectedResource,
+            resourceType: resourceType,
+            // Extrahiere die Ressourcen-ID (entferne Präfix wie "practitioner-" oder "room-")
+            resourceId: selectedResource ? selectedResource.id.replace(/^(practitioner-|room-)/, '') : null,
+            resourceTitle: selectedResource ? selectedResource.title : null
+        };
+        
+        // Zeige Kontextmenü anstatt direkt zu navigieren
+        setSelectedDateData(selectionData);
+        if (selectInfo.jsEvent) {
+            setDateSelectContextMenu({
+                mouseX: selectInfo.jsEvent.clientX,
+                mouseY: selectInfo.jsEvent.clientY,
+            });
         }
+    };
+
+    // Handler für Termin erstellen
+    const handleCreateAppointment = () => {
+        if (selectedDateData && onDateSelect) {
+            onDateSelect(selectedDateData);
+        }
+        handleDateSelectContextMenuClose();
+    };
+
+    // Handler für Abwesenheit/Blockzeit erstellen
+    const handleCreateAbsence = () => {
+        if (selectedDateData) {
+            // Erstelle URL-Parameter für das Abwesenheits-Erstellungsformular
+            const params = new URLSearchParams({
+                start: selectedDateData.start.toISOString(),
+                end: selectedDateData.end.toISOString(),
+                practitioner: selectedDateData.resourceId,
+                resourceType: 'practitioner'
+            });
+            
+            // Navigiere zum Abwesenheits-Erstellungsformular
+            navigate(`/absences/new?${params.toString()}`);
+        }
+        handleDateSelectContextMenuClose();
     };
 
     // Bestimme die Öffnungszeiten für den aktuellen Tag
@@ -289,9 +643,10 @@ const BaseCalendar = ({
     };
 
     return (
-        <>
+        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <style>{breakEventStyles}</style>
-            <FullCalendar
+            <Box sx={{ flex: 1, minHeight: 0 }}>
+                <FullCalendar
                 ref={calendarRef}
                 plugins={plugins}
                 initialView={view || initialView}
@@ -311,6 +666,9 @@ const BaseCalendar = ({
                 eventResize={onEventResize}
                 select={handleDateSelect}
                 eventContent={renderEventContent}
+                eventDisplay="block"
+                eventMinHeight={16}
+                eventMinWidth={40}
                 resourceAreaHeaderContent={resourceAreaHeaderContent}
                 dayHeaderFormat={dayHeaderFormat !== undefined ? dayHeaderFormat : {
                     weekday: 'short',
@@ -331,14 +689,13 @@ const BaseCalendar = ({
                 firstDay={1}
                 slotMinTime={finalSlotMinTime}
                 slotMaxTime={finalSlotMaxTime}
-                slotMinHeight="10px"
-                slotMaxheight="10px"
                 expandRows={true}
-                slotDuration="00:15:00"
-                allDaySlot={true}
+                slotDuration="00:30:00"
+                allDaySlot={false}
                 allDayText='Info'
                 backgroundEvents={backgroundEvents}
                 slotLabelInterval="00:15"
+                nowIndicator={true}
                 eventDidMount={(info) => {
                     // Füge Rechtsklick-Event hinzu
                     const element = info.el;
@@ -348,8 +705,9 @@ const BaseCalendar = ({
                     });
                 }}
             />
+            </Box>
             
-            {/* Kontextmenü */}
+            {/* Kontextmenü für Events */}
             <Menu
                 open={contextMenu !== null}
                 onClose={handleContextMenuClose}
@@ -387,7 +745,32 @@ const BaseCalendar = ({
                     <ListItemText>Löschen</ListItemText>
                 </MenuItem>
             </Menu>
-        </>
+
+            {/* Kontextmenü für Datums-/Zeitauswahl */}
+            <Menu
+                open={dateSelectContextMenu !== null}
+                onClose={handleDateSelectContextMenuClose}
+                anchorReference="anchorPosition"
+                anchorPosition={
+                    dateSelectContextMenu !== null
+                        ? { top: dateSelectContextMenu.mouseY, left: dateSelectContextMenu.mouseX }
+                        : undefined
+                }
+            >
+                <MenuItem onClick={handleCreateAppointment}>
+                    <ListItemIcon>
+                        <Event fontSize="small" />
+                    </ListItemIcon>
+                    <ListItemText>Termin erstellen</ListItemText>
+                </MenuItem>
+                <MenuItem onClick={handleCreateAbsence}>
+                    <ListItemIcon>
+                        <Block fontSize="small" />
+                    </ListItemIcon>
+                    <ListItemText>Abwesenheit/Blockzeit erstellen</ListItemText>
+                </MenuItem>
+            </Menu>
+        </Box>
     );
 };
 

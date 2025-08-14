@@ -4,8 +4,13 @@ import { ThemeProvider } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
 import getCurrentTheme from './theme';
 import { fetchUserProfile, isAuthenticated } from './services/auth';
-import themeService from './services/themeService';
-import { ToastContainer } from './components/common/ToastNotifications';
+
+import { ToastProvider } from './components/common/ToastNotifications';
+import ErrorBoundary from './components/common/ErrorBoundary';
+import { SkipLink } from './components/common/Accessibility';
+import { ResponsiveOptimizer } from './components/common/ResponsiveOptimizer';
+import { UXEnhancer } from './components/common/UXEnhancer';
+import { LinkValidator } from './components/common/LinkValidator';
 import DashboardLayout from './components/DashboardLayout';
 import Home from './components/Home';
 import Calendar from './components/Calendar';
@@ -45,7 +50,9 @@ import InsuranceGroupDetail from './components/InsuranceGroupDetail';
 import Register from './components/Register';
 import AppointmentSeries from './components/AppointmentSeries';
 import AppointmentSeriesForm from './components/AppointmentSeriesForm';
+import AppointmentSeriesDetail from './components/AppointmentSeriesDetail';
 import PracticeDetail from './components/PracticeDetail';
+import WaitlistManagement from './components/WaitlistManagement';
 import CategoryDetail from './components/CategoryDetail';
 import SpecializationDetail from './components/SpecializationDetail';
 import ICDCodeDetail from './components/ICDCodeDetail';
@@ -81,7 +88,10 @@ import AppointmentSeriesNew from './components/AppointmentSeriesNew';
 import Notifications from './components/Notifications';
 import ThemeSettings from './components/ThemeSettings';
 import AdminPanel from './components/AdminPanel';
+import AbsenceNew from './components/AbsenceNew';
+import AbsenceEdit from './components/AbsenceEdit';
 import { PermissionProvider } from './hooks/usePermissions';
+import DebugPermissions from './components/DebugPermissions';
 
 
 function App() {
@@ -117,17 +127,23 @@ function App() {
   }, []);
 
   return (
-    <ThemeProvider theme={currentTheme}>
-      <CssBaseline />
-      <ToastContainer />
-      <PermissionProvider>
-        <Router>
-        <Routes>
+    <ErrorBoundary>
+      <ThemeProvider theme={currentTheme}>
+        <CssBaseline />
+        <ResponsiveOptimizer>
+          <UXEnhancer>
+            <ToastProvider>
+              <PermissionProvider>
+                <Router>
+                  <SkipLink targetId="main-content" />
+                  <div id="main-content">
+                  <Routes>
         <Route path="/" element={<PrivateRoute><DashboardLayout /></PrivateRoute>}>
           <Route path="/" element={<Home />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/patients" element={<PatientList />} />
           <Route path="/appointments/series/new" element={<AppointmentSeriesNew />} />
+          <Route path="/appointments/series/new/:prescriptionId" element={<AppointmentSeriesNew />} />
           <Route path="/patients/:id" element={<PatientDetail />} />
           <Route path="/prescriptions" element={<PrescriptionList />} />
           <Route path="/insurance-management" element={<InsuranceManagement />} />
@@ -142,6 +158,7 @@ function App() {
           <Route path="/treatments/:id/edit" element={<TreatmentEdit />} />
           <Route path="/appointments/new" element={<NewAppointment />} />
           <Route path="/appointments/:id" element={<AppointmentDetail />} />
+          <Route path="/appointments/series/:seriesIdentifier" element={<AppointmentSeriesDetail />} />
           <Route path="/appointments" element={<AppointmentList />} />
           <Route path="/prescriptions/:id" element={<PrescriptionDetail />} />
           <Route path="/patients/new" element={<PatientNew />} />
@@ -150,6 +167,7 @@ function App() {
           <Route path="/dataoverview" element={<DataOverview />} />
           <Route path="/patient-analysis" element={<PatientAnalysis />} />
           <Route path="/finance" element={<FinanceOverview />} />
+          <Route path="/billing" element={<BillingCycleList />} />
           <Route path="/prescriptions/:id/edit" element={<PrescriptionEdit />} />
           <Route path="/billing-cycles" element={<BillingCycleList />} />
           <Route path="/billing-cycles/new" element={<BillingCycleNew />} />
@@ -162,7 +180,7 @@ function App() {
           <Route path="/practice" element={<PracticeDetail />} />
           <Route path="/categories/:id" element={<CategoryDetail />} />
           <Route path="/specializations/:id" element={<SpecializationDetail />} />
-          <Route path="/icdcodes/:id" element={<ICDCodeDetail />} />
+          <Route path="/icd-codes/:id" element={<ICDCodeDetail />} />
           <Route path="/diagnosis-groups/:id" element={<DiagnosisGroupDetail />} />
           <Route path="/billing-cycles/:id" element={<BillingCycleDetail />} />
           <Route path="/surcharges/:id" element={<SurchargeDetail />} />
@@ -172,7 +190,7 @@ function App() {
           <Route path="/working-hours/:id" element={<WorkingHourDetail />} />
           <Route path="/categories/new" element={<CategoryNew />} />
           <Route path="/specializations/new" element={<SpecializationNew />} />
-          <Route path="/icdcodes/new" element={<ICDCodeNew />} />
+          <Route path="/icd-codes/new" element={<ICDCodeNew />} />
           <Route path="/diagnosis-groups/new" element={<DiagnosisGroupNew />} />
           <Route path="/surcharges/new" element={<SurchargeNew />} />
           <Route path="/emergency-contacts/new" element={<EmergencyContactNew />} />
@@ -180,7 +198,7 @@ function App() {
           <Route path="/working-hours/new" element={<WorkingHourNew />} />
           <Route path="/categories/:id/edit" element={<CategoryEdit />} />
           <Route path="/specializations/:id/edit" element={<SpecializationEdit />} />
-          <Route path="/icdcodes/:id/edit" element={<ICDCodeEdit />} />
+          <Route path="/icd-codes/:id/edit" element={<ICDCodeEdit />} />
           <Route path="/diagnosis-groups/:id/edit" element={<DiagnosisGroupEdit />} />
           <Route path="/surcharges/:id/edit" element={<SurchargeEdit />} />
           <Route path="/emergency-contacts/:id/edit" element={<EmergencyContactEdit />} />
@@ -190,6 +208,9 @@ function App() {
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/theme-settings" element={<ThemeSettings />} />
           <Route path="/admin-panel" element={<AdminPanel />} />
+          <Route path="/waitlist" element={<WaitlistManagement />} />
+          <Route path="/absences/new" element={<AbsenceNew />} />
+          <Route path="/absences/:id/edit" element={<AbsenceEdit />} />
         </Route>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
@@ -202,10 +223,16 @@ function App() {
         <Route path="/doctors/new" element={<DoctorNew />} />
         <Route path="/doctors/:id" element={<DoctorDetail />} />
         <Route path="/billing-cycles/bulk" element={<BulkBillingForm />} />
-      </Routes>
-    </Router>
-        </PermissionProvider>
-    </ThemeProvider>
+        <Route path="/debug-permissions" element={<DebugPermissions />} />
+                                </Routes>
+                  </div>
+                </Router>
+              </PermissionProvider>
+            </ToastProvider>
+          </UXEnhancer>
+        </ResponsiveOptimizer>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 

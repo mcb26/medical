@@ -61,7 +61,7 @@ function DashboardLayout() {
       "/insurance-groups",
       "/categories",
       "/specializations",
-      "/icdcodes",
+      "/icd-codes",
       "/diagnosis-groups",
       "/surcharges",
       "/emergency-contacts",
