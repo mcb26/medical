@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import BaseCalendar from './BaseCalendar';
 import api from '../api/axios';
 import { useNavigate } from 'react-router-dom';
@@ -17,9 +17,6 @@ const PractitionerCalendar = ({
     showWeekends
 }) => {
     const [practitioners, setPractitioners] = useState([]);
-    const [practitionersWithHours, setPractitionersWithHours] = useState([]);
-    const [currentDate, setCurrentDate] = useState(new Date());
-    const [currentView, setCurrentView] = useState('timeGridWeek');
     const [events, setEvents] = useState([]);
     const [absences, setAbsences] = useState([]);
     const navigate = useNavigate();
@@ -45,18 +42,30 @@ const PractitionerCalendar = ({
         }
     };
 
-    const updateWorkingHours = async () => {
+    const updateWorkingHours = useCallback(async () => {
+        if (!practitioners || practitioners.length === 0) {
+            return;
+        }
+        
         try {
             const promises = practitioners.map(async (practitioner) => {
+                if (!practitioner || !practitioner.id) {
+                    console.warn('Practitioner ohne ID gefunden:', practitioner);
+                    return practitioner;
+                }
+                
                 try {
-                    const response = await api.get(`/practitioners/${practitioner.id}/working-hours/`);
+                    const response = await api.get(`/practitioners/${practitioner.id}/working_hours/`);
                     return {
                         ...practitioner,
                         working_hours: response.data
                     };
                 } catch (error) {
-                    console.error(`Fehler beim Laden der Arbeitszeiten für ${practitioner.title}:`, error);
-                    return practitioner;
+                    console.error(`Fehler beim Laden der Arbeitszeiten für Practitioner ${practitioner.id}:`, error);
+                    return {
+                        ...practitioner,
+                        working_hours: []
+                    };
                 }
             });
 
@@ -65,13 +74,12 @@ const PractitionerCalendar = ({
         } catch (error) {
             console.error('Fehler beim Aktualisieren der Arbeitszeiten:', error);
         }
-    };
+    }, [practitioners]);
 
     // Manuelle Aktualisierung der Arbeitszeiten
-    const refreshWorkingHours = () => {
-        console.log('Aktualisiere Arbeitszeiten...');
+    const refreshWorkingHours = useCallback(() => {
         fetchPractitioners();
-    };
+    }, []);
 
     // Globale Funktion für manuelle Aktualisierung (über Browser-Konsole aufrufbar)
     useEffect(() => {
@@ -79,7 +87,7 @@ const PractitionerCalendar = ({
         return () => {
             delete window.refreshCalendarWorkingHours;
         };
-    }, []);
+    }, [refreshWorkingHours]);
 
     useEffect(() => {
         fetchPractitioners();
@@ -89,58 +97,18 @@ const PractitionerCalendar = ({
         if (practitioners.length > 0) {
             updateWorkingHours();
         }
-    }, [practitioners.length]);
-
-    useEffect(() => {
-        if (currentDate && currentView) {
-            updateWorkingHours();
-        }
-    }, [currentDate, currentView]);
-
-    useEffect(() => {
-        const filteredPractitioners = practitioners.filter(practitioner => {
-            // practitioner.id ist bereits eine Zahl, kein String
-            return selectedResources.includes(practitioner.id);
-        });
-        
-        if (filteredPractitioners.length !== practitioners.length) {
-            updateWorkingHours();
-        }
-    }, [practitioners.length, selectedResources]);
+    }, [practitioners.length, updateWorkingHours]); // updateWorkingHours zu Dependencies hinzugefügt
 
     useEffect(() => {
         fetchEvents();
     }, [resources]);
 
-    // Lade Arbeitszeiten alle 10 Sekunden neu, um Änderungen zu erfassen
     useEffect(() => {
-        const interval = setInterval(() => {
-            console.log('Automatische Aktualisierung der Arbeitszeiten...');
-            fetchPractitioners();
-        }, 10000); // 10 Sekunden
-
-        return () => clearInterval(interval);
-    }, []);
-
-    // Aktualisiere auch bei Datum- oder View-Änderungen
-    useEffect(() => {
-        console.log('Aktualisiere Arbeitszeiten wegen Datum/View-Änderung...');
-        fetchPractitioners();
-    }, [date, view]);
-
-    // Aktualisiere auch bei Änderungen der ausgewählten Ressourcen
-    useEffect(() => {
-        console.log('Aktualisiere Arbeitszeiten wegen Ressourcen-Änderung...');
-        fetchPractitioners();
-    }, [selectedResources]);
-
-    useEffect(() => {
-        // Passe die Filter ggf. an!
+        // Lade Abwesenheiten für die Kalenderansicht (aber nicht für die Abrechnung)
         api.get('/absences/', {
             params: {
-                // practitioner: <ID(s)>, // optional, falls du nur bestimmte laden willst
                 is_approved: true,
-                start_date: date, // Zeitraum, den du im Kalender siehst
+                start_date: date,
                 end_date: date
             }
         }).then(res => setAbsences(res.data));
@@ -165,6 +133,15 @@ const PractitionerCalendar = ({
     // Handler für Drag & Drop
     const handleEventDrop = async (info) => {
         const event = info.event;
+        
+        // Prüfe ob es eine Abwesenheit ist
+        if (event.extendedProps?.isAbsence) {
+            // Abwesenheiten können nicht per Drag & Drop verschoben werden
+            info.revert();
+            alert("Abwesenheiten können nicht per Drag & Drop verschoben werden. Bitte bearbeiten Sie die Abwesenheit direkt.");
+            return;
+        }
+        
         try {
             await api.patch(`/appointments/${event.id}/`, {
                 appointment_date: event.start.toISOString(),
@@ -179,6 +156,15 @@ const PractitionerCalendar = ({
     // Handler für Resize
     const handleEventResize = async (info) => {
         const event = info.event;
+        
+        // Prüfe ob es eine Abwesenheit ist
+        if (event.extendedProps?.isAbsence) {
+            // Abwesenheiten können nicht per Resize geändert werden
+            info.revert();
+            alert("Abwesenheiten können nicht per Drag & Drop geändert werden. Bitte bearbeiten Sie die Abwesenheit direkt.");
+            return;
+        }
+        
         try {
             await api.patch(`/appointments/${event.id}/`, {
                 appointment_date: event.start.toISOString(),
@@ -193,7 +179,25 @@ const PractitionerCalendar = ({
 
     // Handler für Doppelklick auf Termin
     const handleEventDoubleClick = (info) => {
-        navigate(`/appointments/${info.event.id}`);
+        // Prüfe ob es eine Abwesenheit ist
+        if (info.event.extendedProps?.isAbsence) {
+            // Öffne Abwesenheits-Bearbeitung
+            const absenceData = info.event.extendedProps.absenceData;
+            navigate(`/absences/${absenceData.id}/edit`);
+        } else {
+            // Normale Termin-Navigation
+            navigate(`/appointments/${info.event.id}`);
+        }
+    };
+
+    // Handler für Klick auf Event (einfacher Klick)
+    const handleEventClick = (info) => {
+        // Prüfe ob es eine Abwesenheit ist
+        if (info.event.extendedProps?.isAbsence) {
+            // Öffne Abwesenheits-Bearbeitung
+            const absenceData = info.event.extendedProps.absenceData;
+            navigate(`/absences/${absenceData.id}/edit`);
+        }
     };
 
     const handleEventDelete = async (eventId) => {
@@ -231,8 +235,8 @@ const PractitionerCalendar = ({
         return [];
     };
 
-    // Beispiel: Annahme, du hast ein Array absences mit den Abwesenheiten
-    const getAbsenceBackgroundEvents = () => {
+    // Abwesenheiten als Events für die Kalenderansicht (aber nicht für die Abrechnung)
+    const getAbsenceEvents = () => {
         return absences.map(abs => {
             let start = abs.start_date;
             let end = abs.end_date;
@@ -242,21 +246,43 @@ const PractitionerCalendar = ({
                 endDate.setDate(endDate.getDate() + 1);
                 end = endDate.toISOString().slice(0, 10);
                 return {
+                    id: `absence-${abs.id}`,
                     start: `${start}T00:00:00`,
                     end: `${end}T00:00:00`,
-                    display: 'background',
-                    color: '#888',
+                    display: 'block', // Normales Event, nicht Hintergrund
+                    backgroundColor: '#888',
+                    borderColor: '#666',
                     resourceId: `practitioner-${abs.practitioner}`,
-                    title: abs.absence_type
+                    title: 'Abwesenheit', // Einfacher Titel, Details werden im Event angezeigt
+                    editable: false, // Abwesenheiten sind nicht dragbar
+                    durationEditable: false, // Abwesenheiten können nicht resized werden
+                    extendedProps: {
+                        isAbsence: true,
+                        absenceData: abs,
+                        absence_type: abs.absence_type,
+                        notes: abs.notes,
+                        is_full_day: abs.is_full_day
+                    }
                 };
             } else {
                 return {
+                    id: `absence-${abs.id}`,
                     start: `${start}T${abs.start_time}`,
                     end: `${end}T${abs.end_time}`,
-                    display: 'background',
-                    color: '#888',
+                    display: 'block', // Normales Event, nicht Hintergrund
+                    backgroundColor: '#888',
+                    borderColor: '#666',
                     resourceId: `practitioner-${abs.practitioner}`,
-                    title: abs.absence_type
+                    title: 'Abwesenheit', // Einfacher Titel, Details werden im Event angezeigt
+                    editable: false, // Abwesenheiten sind nicht dragbar
+                    durationEditable: false, // Abwesenheiten können nicht resized werden
+                    extendedProps: {
+                        isAbsence: true,
+                        absenceData: abs,
+                        absence_type: abs.absence_type,
+                        notes: abs.notes,
+                        is_full_day: abs.is_full_day
+                    }
                 };
             }
         });
@@ -288,21 +314,25 @@ const PractitionerCalendar = ({
                 end: new Date(new Date(ev.appointment_date).getTime() + (ev.duration_minutes || 30) * 60000).toISOString(),
                 resourceId: `practitioner-${ev.practitioner}`,
                 backgroundColor: ev.status === 'ready_to_bill' ? '#4caf50' : 
-                                ev.status === 'completed' ? '#2196f3' : 
-                                ev.status === 'cancelled' ? '#f44336' : '#1976d2',
+                                ev.status === 'completed' ? '#1976d2' : 
+                                ev.status === 'cancelled' ? '#f44336' : 
+                                ev.status === 'no_show' ? '#d32f2f' : '#ff9800',
                 borderColor: ev.status === 'ready_to_bill' ? '#4caf50' : 
-                           ev.status === 'completed' ? '#2196f3' : 
-                           ev.status === 'cancelled' ? '#f44336' : '#1976d2',
+                           ev.status === 'completed' ? '#1976d2' : 
+                           ev.status === 'cancelled' ? '#f44336' : 
+                           ev.status === 'no_show' ? '#d32f2f' : '#ff9800',
                     extendedProps: {
+                id: ev.id, // Appointment-ID für Status-Änderungen
                 treatment_name: ev.treatment_name,
                 patient_name: ev.patient_name,
                 duration_minutes: ev.duration_minutes,
                 status: ev.status,
-                treatment_color: ev.treatment_category?.color || '#1976d2'
+                treatment_color: ev.treatment_category?.color || '#1976d2',
+                room_name: ev.room_name
                     }
                 })),
                 ...getBackgroundEvents(),
-                ...getAbsenceBackgroundEvents()
+                ...getAbsenceEvents()
             ]}
             resourceType="practitioners"
             calendarKey="practitioners"
@@ -312,6 +342,7 @@ const PractitionerCalendar = ({
             onDateChange={onDateChange}
             onEventDrop={handleEventDrop}
             onEventResize={handleEventResize}
+            onEventClick={handleEventClick}
             onEventDoubleClick={handleEventDoubleClick}
             onEventDelete={handleEventDelete}
             onEventMarkReadyToBill={handleEventMarkReadyToBill}

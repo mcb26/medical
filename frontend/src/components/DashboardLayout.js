@@ -28,6 +28,7 @@ function DashboardLayout() {
       "/insurance-management": "Krankenkassen",
       "/finance": "Finanzen",
       "/billing-cycles": "Abrechnungen",
+      "/billing-cycles/bulk": "Massenabrechnung",
       "/dataoverview": "Daten",
       "/practice": "Praxis",
       "/settings": "Einstellungen",
@@ -68,6 +69,15 @@ function DashboardLayout() {
       "/working-hours",
       "/doctors"
     ];
+    
+    // Spezielle Ausnahmen für Routen ohne Plus-Button
+    const excludeRoutes = [
+      "/billing-cycles/bulk" // Massenabrechnung hat keinen Plus-Button
+    ];
+    
+    if (excludeRoutes.some(route => location.pathname.startsWith(route))) {
+      return false;
+    }
     
     return addIconRoutes.some(route => location.pathname.startsWith(route));
   };

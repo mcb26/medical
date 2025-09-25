@@ -115,10 +115,7 @@ const Notifications = () => {
     }
   };
 
-  const handleResetToDemo = () => {
-    notificationService.resetToDemo();
-    showSnackbar('Benachrichtigungen auf Demo-Daten zurückgesetzt', 'info');
-  };
+
 
   const showSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
@@ -278,13 +275,7 @@ const Notifications = () => {
             </ModernButton>
           )}
           
-          <ModernButton
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={handleResetToDemo}
-          >
-            Demo-Daten zurücksetzen
-          </ModernButton>
+
         </Box>
 
         {/* Filters */}

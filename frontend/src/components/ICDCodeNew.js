@@ -28,7 +28,7 @@ function ICDCodeNew() {
   useEffect(() => {
     const fetchParentCodes = async () => {
       try {
-        const response = await api.get('/icdcodes/');
+        const response = await api.get('/icd-codes/');
         setParentCodes(response.data);
       } catch (error) {
         console.error('Fehler beim Laden der übergeordneten Codes:', error);
@@ -41,8 +41,8 @@ function ICDCodeNew() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await api.post('/icdcodes/', formData);
-      navigate(`/icdcodes/${response.data.id}`);
+      const response = await api.post('/icd-codes/', formData);
+      navigate(`/icd-codes/${response.data.id}`);
     } catch (error) {
       setError('Fehler beim Erstellen des ICD-Codes');
     }

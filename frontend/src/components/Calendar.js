@@ -2,7 +2,29 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PractitionerCalendar from './PractitionerCalendar';
 import RoomsCalendar from './RoomsCalendar';
-import { ToggleButton, ToggleButtonGroup, Box, Button, Typography, IconButton, Stack, Select, MenuItem, FormControl, InputLabel, OutlinedInput, Checkbox, ListItemText, ListSubheader, Divider } from '@mui/material';
+import { 
+  ToggleButton, 
+  ToggleButtonGroup, 
+  Box, 
+  Button, 
+  Typography, 
+  IconButton, 
+  Stack, 
+  Select, 
+  MenuItem, 
+  FormControl, 
+  InputLabel, 
+  OutlinedInput, 
+  Checkbox, 
+  ListItemText, 
+  ListSubheader, 
+  Divider,
+  useTheme,
+  useMediaQuery,
+  Collapse,
+  Card,
+  CardContent
+} from '@mui/material';
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import deLocale from 'date-fns/locale/de';
@@ -12,9 +34,13 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import ViewWeekIcon from '@mui/icons-material/ViewWeek';
 import TableRowsIcon from '@mui/icons-material/TableRows';
+import MenuIcon from '@mui/icons-material/Menu';
 import AddIcon from '@mui/icons-material/Add';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import WeekendIcon from '@mui/icons-material/Weekend';
 import { format, startOfWeek, endOfWeek } from 'date-fns';
 import api from '../api/axios';
+import { isAuthenticated } from '../services/auth';
 
 const allowedViews = ['resourceTimeGridDay', 'resourceTimeGridWeek', 'dayGridMonth'];
 const getInitialView = () => {
@@ -33,6 +59,7 @@ function getCurrentLabel(view, date) {
         const weekNumber = format(d, "I", { locale: deLocale }); // ISO week
         return `Woche ${weekNumber}: ${format(start, "dd.MM.yyyy", { locale: deLocale })} – ${format(end, "dd.MM.yyyy", { locale: deLocale })}`;
     }
+
     if (view === 'dayGridMonth') {
         return format(d, "MMMM yyyy", { locale: deLocale });
     }
@@ -46,6 +73,9 @@ const getInitialShowWeekends = () => {
 
 const Calendar = () => {
     const navigate = useNavigate();
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+    const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const [view, setView] = useState(getInitialView);
     const [currentDate, setCurrentDate] = useState(() => {
         const stored = localStorage.getItem('calendar_date');
@@ -60,17 +90,28 @@ const Calendar = () => {
     const [resources, setResources] = useState([]);
     const [practiceSettings, setPracticeSettings] = useState(null);
     const [showWeekends, setShowWeekends] = useState(getInitialShowWeekends);
+    const [showMobileMenu, setShowMobileMenu] = useState(false);
 
     // Speichere Modus im localStorage wenn er sich ändert
     useEffect(() => {
         localStorage.setItem('calendar_mode', mode);
     }, [mode]);
 
+    // Authentifizierungsprüfung
+    useEffect(() => {
+        if (!isAuthenticated()) {
+            navigate('/login');
+            return;
+        }
+    }, [navigate]);
+
     // Lade Praxiseinstellungen beim Start
     useEffect(() => {
         const fetchPracticeSettings = async () => {
+            if (!isAuthenticated()) return;
+            
             try {
-                const response = await api.get('/practice/instance/');
+                const response = await api.get('/practice/get_instance/');
                 setPracticeSettings(response.data);
             } catch (error) {
                 console.error('Fehler beim Laden der Praxiseinstellungen:', error);
@@ -82,6 +123,8 @@ const Calendar = () => {
     // Lade Ressourcen (Räume oder Behandler) beim Start und wenn sich der Modus ändert
     useEffect(() => {
         const fetchResources = async () => {
+            if (!isAuthenticated()) return;
+            
             try {
                 const endpoint = mode === 'rooms' ? '/rooms/' : '/practitioners/';
                 const response = await api.get(endpoint);
@@ -178,202 +221,377 @@ const Calendar = () => {
         navigate('/appointments/new');
     };
 
+    const handleMarkAllCompletedAsReadyToBill = async () => {
+        try {
+            // Hole alle Termine mit Status 'completed'
+            const response = await api.get('/appointments/', {
+                params: { status: 'completed' }
+            });
+            
+            const completedAppointments = response.data;
+            
+            if (completedAppointments.length === 0) {
+                alert('Keine abgeschlossenen Termine gefunden.');
+                return;
+            }
+            
+            // Bestätigung vom Benutzer
+            const confirmed = window.confirm(
+                `${completedAppointments.length} abgeschlossene Termine werden als abrechnungsbereit markiert. Fortfahren?`
+            );
+            
+            if (!confirmed) return;
+            
+            // Setze alle Termine auf 'ready_to_bill'
+            const updatePromises = completedAppointments.map(appointment => 
+                api.patch(`/appointments/${appointment.id}/`, {
+                    status: 'ready_to_bill'
+                })
+            );
+            
+            await Promise.all(updatePromises);
+            
+            alert(`${completedAppointments.length} Termine wurden erfolgreich als abrechnungsbereit markiert!`);
+            
+            // Lade die Kalender neu (durch Neuladen der Seite)
+            window.location.reload();
+            
+        } catch (error) {
+            console.error('Fehler beim Markieren der Termine:', error);
+            alert('Fehler beim Markieren der Termine. Bitte versuchen Sie es erneut.');
+        }
+    };
+
     return (
-        <Box>
-            <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2, flexWrap: 'wrap' }}>
-                {/* Ansichtsauswahl */}
-                <ToggleButtonGroup
-                    value={view}
-                    exclusive
-                    onChange={(e, v) => v && handleViewChange(v)}
-                    size="small"
-                >
-                    <ToggleButton value="resourceTimeGridDay"><TableRowsIcon /> Tag</ToggleButton>
-                    <ToggleButton value="resourceTimeGridWeek"><ViewWeekIcon /> Woche</ToggleButton>
-                    <ToggleButton value="dayGridMonth"><CalendarMonthIcon /> Monat</ToggleButton>
-                </ToggleButtonGroup>
-
-                {/* Räume/Behandler Umschalter */}
-                <ToggleButtonGroup
-                    value={mode}
-                    exclusive
-                    onChange={(e, v) => v && setMode(v)}
-                    size="small"
-                >
-                    <ToggleButton value="rooms">Räume</ToggleButton>
-                    <ToggleButton value="practitioners">Behandler</ToggleButton>
-                </ToggleButtonGroup>
-
-                {/* Ressourcen-Auswahl Dropdown */}
-                <FormControl sx={{ minWidth: 200 }} size="small">
-                    <InputLabel id="resources-select-label">
-                        {mode === 'rooms' ? 'Räume' : 'Behandler'}
-                    </InputLabel>
-                    <Select
-                        labelId="resources-select-label"
-                        multiple
-                        value={selectedResources}
-                        onChange={handleResourceChange}
-                        input={<OutlinedInput label={mode === 'rooms' ? 'Räume' : 'Behandler'} />}
-                        renderValue={(selected) => (
-                            <Typography variant="body2">
-                                {selected.length} {mode === 'rooms' ? 'Räume' : 'Behandler'} ausgewählt
-                            </Typography>
-                        )}
-                        MenuProps={{
-                            PaperProps: {
-                                style: {
-                                    maxHeight: 400,
-                                    width: 250
-                                }
-                            }
-                        }}
+        <Box sx={{ 
+            p: { xs: 0.5, sm: 1 }, 
+            height: '100vh',
+            display: 'flex',
+            flexDirection: 'column'
+        }}>
+            {/* Mobile Menu Toggle */}
+            {isMobile && (
+                <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Button
+                        variant="outlined"
+                        startIcon={<MenuIcon />}
+                        onClick={() => setShowMobileMenu(!showMobileMenu)}
+                        size="small"
                     >
-                        <ListSubheader>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <Typography variant="subtitle2">
-                                    {selectedResources.length} ausgewählt
-                                </Typography>
-                                <Button
-                                    size="small"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedResources(resources.map(r => r.id));
-                                    }}
-                                >
-                                    Alle
-                                </Button>
-                                <Button
-                                    size="small"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedResources([]);
-                                    }}
-                                >
-                                    Keine
-                                </Button>
-                            </Box>
-                        </ListSubheader>
-                        <Divider />
-                        {resources.map((resource) => (
-                            <MenuItem 
-                                key={resource.id} 
-                                value={resource.id}
-                                sx={{
-                                    py: 0.5,
-                                    '&:hover': {
-                                        backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                        Kalender-Einstellungen
+                    </Button>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 500 }}>
+                        {getCurrentLabel(view, currentDate)}
+                    </Typography>
+                </Box>
+            )}
+
+            {/* Controls Section */}
+            <Collapse in={!isMobile || showMobileMenu}>
+                <Card sx={{ mb: 1, p: { xs: 0.5, sm: 1 } }}>
+                    <CardContent sx={{ p: { xs: 0.5, sm: 1 } }}>
+                        <Stack 
+                            direction={isMobile ? 'column' : 'row'} 
+                            spacing={isMobile ? 2 : 1} 
+                            alignItems={isMobile ? 'stretch' : 'center'}
+                            sx={{ flexWrap: 'wrap' }}
+                        >
+                            {/* Ansichtsauswahl */}
+                            <ToggleButtonGroup
+                                value={view}
+                                exclusive
+                                onChange={(e, v) => v && handleViewChange(v)}
+                                size={isMobile ? 'medium' : 'small'}
+                                orientation={isMobile ? 'horizontal' : 'horizontal'}
+                                sx={{ 
+                                    width: isMobile ? '100%' : 'auto',
+                                    '& .MuiToggleButton-root': {
+                                        flex: isMobile ? 1 : 'none',
+                                        minWidth: isMobile ? 'auto' : '60px'
                                     }
                                 }}
                             >
-                                <Checkbox 
-                                    checked={selectedResources.includes(resource.id)}
-                                    size="small"
-                                />
-                                <ListItemText 
-                                    primary={mode === 'rooms' ? resource.name : `${resource.first_name} ${resource.last_name}`}
-                                    primaryTypographyProps={{
-                                        variant: 'body2'
+                                <ToggleButton value="resourceTimeGridDay">
+                                    {!isSmallMobile && <TableRowsIcon sx={{ mr: 1 }} />}
+                                    {isSmallMobile ? 'Tag' : 'Tag'}
+                                </ToggleButton>
+                                <ToggleButton value="resourceTimeGridWeek">
+                                    {!isSmallMobile && <ViewWeekIcon sx={{ mr: 1 }} />}
+                                    {isSmallMobile ? 'Woche' : 'Woche'}
+                                </ToggleButton>
+                                <ToggleButton value="dayGridMonth">
+                                    {!isSmallMobile && <CalendarMonthIcon sx={{ mr: 1 }} />}
+                                    {isSmallMobile ? 'Monat' : 'Monat'}
+                                </ToggleButton>
+                            </ToggleButtonGroup>
+
+                            {/* Räume/Behandler Umschalter */}
+                            <ToggleButtonGroup
+                                value={mode}
+                                exclusive
+                                onChange={(e, v) => v && setMode(v)}
+                                size={isMobile ? 'medium' : 'small'}
+                                orientation={isMobile ? 'horizontal' : 'horizontal'}
+                                sx={{ 
+                                    width: isMobile ? '100%' : 'auto',
+                                    '& .MuiToggleButton-root': {
+                                        flex: isMobile ? 1 : 'none'
+                                    }
+                                }}
+                            >
+                                <ToggleButton value="rooms">Räume</ToggleButton>
+                                <ToggleButton value="practitioners">Behandler</ToggleButton>
+                            </ToggleButtonGroup>
+
+                            {/* Ressourcen-Auswahl Dropdown */}
+                            <FormControl 
+                                sx={{ 
+                                    minWidth: isMobile ? '100%' : 200,
+                                    width: isMobile ? '100%' : 'auto'
+                                }} 
+                                size={isMobile ? 'medium' : 'small'}
+                            >
+                                <InputLabel id="resources-select-label">
+                                    {mode === 'rooms' ? 'Räume' : 'Behandler'}
+                                </InputLabel>
+                                <Select
+                                    labelId="resources-select-label"
+                                    multiple
+                                    value={selectedResources}
+                                    onChange={handleResourceChange}
+                                    input={<OutlinedInput label={mode === 'rooms' ? 'Räume' : 'Behandler'} />}
+                                    renderValue={(selected) => (
+                                        <Typography variant="body2">
+                                            {selected.length} {mode === 'rooms' ? 'Räume' : 'Behandler'} ausgewählt
+                                        </Typography>
+                                    )}
+                                    MenuProps={{
+                                        PaperProps: {
+                                            style: {
+                                                maxHeight: 400,
+                                                width: isMobile ? '90vw' : 250
+                                            }
+                                        }
                                     }}
+                                >
+                                    <ListSubheader>
+                                        <Box sx={{ 
+                                            display: 'flex', 
+                                            justifyContent: 'space-between', 
+                                            alignItems: 'center',
+                                            flexDirection: isMobile ? 'column' : 'row',
+                                            gap: isMobile ? 1 : 0
+                                        }}>
+                                            <Typography variant="subtitle2">
+                                                {selectedResources.length} ausgewählt
+                                            </Typography>
+                                            <Stack direction="row" spacing={1}>
+                                                <Button
+                                                    size="small"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedResources(resources.map(r => r.id));
+                                                    }}
+                                                >
+                                                    Alle
+                                                </Button>
+                                                <Button
+                                                    size="small"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedResources([]);
+                                                    }}
+                                                >
+                                                    Keine
+                                                </Button>
+                                            </Stack>
+                                        </Box>
+                                    </ListSubheader>
+                                    <Divider />
+                                    {resources.map((resource) => (
+                                        <MenuItem 
+                                            key={resource.id} 
+                                            value={resource.id}
+                                            sx={{
+                                                py: 0.5,
+                                                '&:hover': {
+                                                    backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                                                }
+                                            }}
+                                        >
+                                            <Checkbox 
+                                                checked={selectedResources.includes(resource.id)}
+                                                size="small"
+                                            />
+                                            <ListItemText 
+                                                primary={mode === 'rooms' ? resource.name : `${resource.first_name} ${resource.last_name}`}
+                                                primaryTypographyProps={{
+                                                    variant: 'body2'
+                                                }}
+                                            />
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+
+                            {/* Wochenend-Anzeige Umschalter */}
+                            <Box sx={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: 0.5,
+                                width: isMobile ? '100%' : 'auto'
+                            }}>
+                                <Checkbox
+                                    checked={showWeekends}
+                                    onChange={e => setShowWeekends(e.target.checked)}
+                                    size={isMobile ? 'medium' : 'small'}
                                 />
-                            </MenuItem>
-                        ))}
-                    </Select>
-                </FormControl>
+                                <WeekendIcon 
+                                    sx={{ 
+                                        fontSize: isMobile ? '1.2rem' : '1rem',
+                                        color: showWeekends ? 'primary.main' : 'text.secondary'
+                                    }} 
+                                />
+                            </Box>
 
-                {/* Wochenend-Anzeige Umschalter */}
-                <FormControl sx={{ minWidth: 150 }} size="small">
-                    <Checkbox
-                        checked={showWeekends}
-                        onChange={e => setShowWeekends(e.target.checked)}
-                    />
-                    <Typography variant="body2">Wochenenden anzeigen</Typography>
-                </FormControl>
+                            {/* Action Buttons */}
+                            <Stack 
+                                direction={isMobile ? 'column' : 'row'} 
+                                spacing={1}
+                                sx={{ width: isMobile ? '100%' : 'auto' }}
+                            >
+                                {/* Termin anlegen Button */}
+                                <Button
+                                    variant="contained"
+                                    color="primary"
+                                    startIcon={<AddIcon />}
+                                    onClick={handleAddAppointment}
+                                    size={isMobile ? 'medium' : 'small'}
+                                    fullWidth={isMobile}
+                                >
+                                    {isSmallMobile ? 'Termin' : 'Termin anlegen'}
+                                </Button>
 
-                {/* Termin anlegen Button */}
-                <Button
-                    variant="contained"
-                    color="primary"
-                    startIcon={<AddIcon />}
-                    onClick={handleAddAppointment}
-                    size="small"
-                >
-                    Termin anlegen
-                </Button>
+                                {/* Alle Completed als Ready to Bill markieren */}
+                                <Button
+                                    variant="outlined"
+                                    color="success"
+                                    startIcon={<CheckCircleIcon />}
+                                    onClick={handleMarkAllCompletedAsReadyToBill}
+                                    size={isMobile ? 'medium' : 'small'}
+                                    fullWidth={isMobile}
+                                >
+                                    {isSmallMobile ? 'Abrechnungsbereit' : 'Alle abgeschlossen → Abrechnungsbereit'}
+                                </Button>
+                            </Stack>
 
-                {/* DatePicker */}
-                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={deLocale}>
-                    <Box sx={{ position: 'relative' }}>
-                        <IconButton size="small" onClick={() => setOpenDatePicker(true)}>
-                            <CalendarMonthIcon />
-                        </IconButton>
-                        <DatePicker
-                            open={openDatePicker}
-                            onClose={() => setOpenDatePicker(false)}
-                            value={currentDate}
-                            onChange={(newDate) => {
-                                handleDateChange(newDate);
-                                setOpenDatePicker(false);
-                            }}
-                            format="dd.MM.yyyy"
-                            slotProps={{
-                                textField: {
-                                    sx: { display: 'none' }
-                                },
-                                actionBar: {
-                                    actions: ['today', 'clear'],
-                                },
-                            }}
-                            views={['year', 'month', 'day']}
-                            showDaysOutsideCurrentMonth
-                            closeOnSelect
-                            maxDate={new Date('2100-12-31')}
-                            minDate={new Date('2000-01-01')}
-                        />
-                    </Box>
-                </LocalizationProvider>
+                            {/* DatePicker und Navigation */}
+                            <Stack 
+                                direction={isMobile ? 'column' : 'row'} 
+                                spacing={1}
+                                alignItems={isMobile ? 'stretch' : 'center'}
+                                sx={{ width: isMobile ? '100%' : 'auto' }}
+                            >
+                                {/* DatePicker */}
+                                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={deLocale}>
+                                    <Box sx={{ position: 'relative' }}>
+                                        <Button
+                                            variant="outlined"
+                                            startIcon={<CalendarMonthIcon />}
+                                            onClick={() => setOpenDatePicker(true)}
+                                            size={isMobile ? 'medium' : 'small'}
+                                            fullWidth={isMobile}
+                                        >
+                                            {format(currentDate, 'dd.MM.yyyy')}
+                                        </Button>
+                                        <DatePicker
+                                            open={openDatePicker}
+                                            onClose={() => setOpenDatePicker(false)}
+                                            value={currentDate}
+                                            onChange={(newDate) => {
+                                                handleDateChange(newDate);
+                                                setOpenDatePicker(false);
+                                            }}
+                                            format="dd.MM.yyyy"
+                                            slotProps={{
+                                                textField: {
+                                                    sx: { display: 'none' }
+                                                },
+                                                actionBar: {
+                                                    actions: ['today', 'clear'],
+                                                },
+                                            }}
+                                            views={['year', 'month', 'day']}
+                                            showDaysOutsideCurrentMonth
+                                            closeOnSelect
+                                            maxDate={new Date('2100-12-31')}
+                                            minDate={new Date('2000-01-01')}
+                                        />
+                                    </Box>
+                                </LocalizationProvider>
 
-                {/* Navigation */}
-                <IconButton onClick={handlePrev}><ChevronLeftIcon /></IconButton>
-                <Button onClick={handleToday} variant="outlined" startIcon={<TodayIcon />}>Heute</Button>
-                <IconButton onClick={handleNext}><ChevronRightIcon /></IconButton>
+                                {/* Navigation */}
+                                <Stack direction="row" spacing={1} justifyContent="center">
+                                    <IconButton onClick={handlePrev} size={isMobile ? 'medium' : 'small'}>
+                                        <ChevronLeftIcon />
+                                    </IconButton>
+                                    <Button 
+                                        onClick={handleToday} 
+                                        variant="outlined" 
+                                        startIcon={<TodayIcon />}
+                                        size={isMobile ? 'medium' : 'small'}
+                                    >
+                                        {isSmallMobile ? 'Heute' : 'Heute'}
+                                    </Button>
+                                    <IconButton onClick={handleNext} size={isMobile ? 'medium' : 'small'}>
+                                        <ChevronRightIcon />
+                                    </IconButton>
+                                </Stack>
+                            </Stack>
+                        </Stack>
+                    </CardContent>
+                </Card>
+            </Collapse>
 
-                {/* Aktuelle Ansichtsanzeige */}
-                <Typography variant="subtitle1" sx={{ ml: 2, fontWeight: 500 }}>
+            {/* Desktop Current View Label */}
+            {!isMobile && (
+                <Typography variant="subtitle2" sx={{ ml: 1, fontWeight: 500, mb: 1, fontSize: '0.9rem' }}>
                     {getCurrentLabel(view, currentDate)}
                 </Typography>
-            </Stack>
+            )}
 
             {/* Kalender */}
-            {mode === 'rooms' ? (
-                <RoomsCalendar
-                    view={view}
-                    date={currentDate}
-                    onViewChange={handleViewChange}
-                    onDateChange={handleDateChange}
-                    selectedResources={selectedResources}
-                    resources={resources}
-                    onPrev={handlePrev}
-                    onNext={handleNext}
-                    onToday={handleToday}
-                    openingHours={practiceSettings?.opening_hours}
-                    showWeekends={showWeekends}
-                />
-            ) : (
-                <PractitionerCalendar
-                    view={view}
-                    date={currentDate}
-                    onViewChange={handleViewChange}
-                    onDateChange={handleDateChange}
-                    selectedResources={selectedResources}
-                    resources={resources}
-                    onPrev={handlePrev}
-                    onNext={handleNext}
-                    onToday={handleToday}
-                    openingHours={practiceSettings?.opening_hours}
-                    showWeekends={showWeekends}
-                />
-            )}
+            <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                {mode === 'rooms' ? (
+                    <RoomsCalendar
+                        view={view}
+                        date={currentDate}
+                        onViewChange={handleViewChange}
+                        onDateChange={handleDateChange}
+                        selectedResources={selectedResources}
+                        resources={resources}
+                        onPrev={handlePrev}
+                        onNext={handleNext}
+                        onToday={handleToday}
+                        openingHours={practiceSettings?.opening_hours}
+                        showWeekends={showWeekends}
+                    />
+                ) : (
+                    <PractitionerCalendar
+                        view={view}
+                        date={currentDate}
+                        onViewChange={handleViewChange}
+                        onDateChange={handleDateChange}
+                        selectedResources={selectedResources}
+                        resources={resources}
+                        onPrev={handlePrev}
+                        onNext={handleNext}
+                        onToday={handleToday}
+                        openingHours={practiceSettings?.opening_hours}
+                        showWeekends={showWeekends}
+                    />
+                )}
+            </Box>
         </Box>
     );
 };

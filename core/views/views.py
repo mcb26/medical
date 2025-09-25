@@ -28,14 +28,26 @@ from core.models import (
     Practitioner,
     Room,
     WorkingHour,
-    Absence
+    Absence,
+    Waitlist,
+    LocalHoliday
 )
-from core.serializers import AppointmentSerializer, AbsenceSerializer
+from core.serializers import AppointmentSerializer, AbsenceSerializer, WaitlistSerializer, LocalHolidaySerializer
 
 from core.services.billing_service import BillingService
 from core.services.propose_and_create_appointments import is_practitioner_available, is_room_available, is_within_practice_hours, propose_and_create_appointments
 
 from core.services.appointment_series import create_appointment_series, AppointmentSeriesService
+from core.services.prescription_series_service import PrescriptionSeriesService
+try:
+    from core.services.ocr_service import OCRService
+except ImportError:
+    OCRService = None
+from core.services.performance_service import PerformanceService, QueryOptimizer, CacheOptimizer
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+import os
+import tempfile
 from ..models import (
     Bundesland,
     CalendarSettings,
@@ -60,7 +72,8 @@ from ..models import (
     Appointment,
     WorkingHour,
     Practice,
-    BillingItem
+    BillingItem,
+    Payment
 )
 from ..serializers import (
     BundeslandSerializer,
@@ -87,7 +100,8 @@ from ..serializers import (
     AppointmentSeriesSerializer,
     WorkingHourSerializer,
     PracticeSerializer,
-    BillingItemSerializer
+    BillingItemSerializer,
+    PaymentSerializer
 )
 from core.appointment_validators import (
     validate_working_hours,
@@ -135,12 +149,17 @@ class PatientViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        """Filtert Patienten nach Benutzerberechtigungen"""
+        """Filtert Patienten nach Benutzerberechtigungen mit optimierten Queries"""
         user = self.request.user
+        
+        # Basis-Query mit prefetch_related für optimierte Performance
+        base_queryset = Patient.objects.prefetch_related(
+            'insurances__insurance_provider'
+        )
         
         # Wenn der Benutzer ein Admin/Superuser ist, zeige alle Patienten
         if user.is_superuser or user.is_admin:
-            return Patient.objects.all()
+            return base_queryset
             
         # Wenn der Benutzer ein Therapeut ist, zeige nur seine Patienten
         if user.is_therapist:
@@ -153,20 +172,31 @@ class PatientViewSet(viewsets.ModelViewSet):
                 # Finde alle Patienten, die Termine bei diesem Practitioner haben
                 appointments = Appointment.objects.filter(practitioner=practitioner)
                 patient_ids = appointments.values_list('patient_id', flat=True).distinct()
-                return Patient.objects.filter(id__in=patient_ids)
+                return base_queryset.filter(id__in=patient_ids)
             else:
                 return Patient.objects.none()
                 
         # Für normale Benutzer (Verwaltung) zeige alle Patienten
-        return Patient.objects.all()
+        return base_queryset
 
     @action(detail=True, methods=['get'])
     def appointments(self, request, pk=None):
         """
-        Liste aller Termine eines Patienten
+        Liste aller Termine eines Patienten mit optimierten Queries
         """
         patient = self.get_object()
-        appointments = Appointment.objects.filter(patient=patient)
+        appointments = Appointment.objects.filter(patient=patient).select_related(
+            'practitioner',
+            'treatment',
+            'room',
+            'prescription__treatment_1',
+            'prescription__treatment_2',
+            'prescription__treatment_3',
+            'prescription__doctor',
+            'prescription__diagnosis_code'
+        ).prefetch_related(
+            'billing_items'
+        )
         serializer = AppointmentSerializer(appointments, many=True)
         return Response(serializer.data)
 
@@ -212,6 +242,20 @@ class PractitionerViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Optional: Überschreiben für zusätzliche Filterung"""
         return Practitioner.objects.filter(is_active=True).order_by('first_name', 'last_name')
+    
+    @action(detail=True, methods=['get'])
+    def working_hours(self, request, pk=None):
+        """Hole die Arbeitszeiten für einen spezifischen Behandler"""
+        try:
+            practitioner = self.get_object()
+            working_hours = WorkingHour.objects.filter(practitioner=practitioner)
+            serializer = WorkingHourSerializer(working_hours, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            return Response(
+                {'error': f'Fehler beim Laden der Arbeitszeiten: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class SpecializationViewSet(viewsets.ModelViewSet):
     queryset = Specialization.objects.all()
@@ -237,9 +281,12 @@ class AppointmentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        """Filtert Termine nach Benutzerberechtigungen"""
+        """Filtert Termine nach Benutzerberechtigungen mit optimierten Queries"""
         user = self.request.user
         queryset = super().get_queryset()
+        
+        # Verwende QueryOptimizer für optimierte Queries
+        queryset = QueryOptimizer.optimize_appointment_queryset(queryset)
 
         # Wenn der Benutzer ein Admin/Superuser ist, zeige alle Termine
         if user.is_superuser or user.is_admin:
@@ -258,6 +305,45 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             
         # Für normale Benutzer (Verwaltung) zeige alle Termine
         return queryset
+
+    def list(self, request, *args, **kwargs):
+        """Erweiterte Liste mit Filterung nach series_identifier"""
+        queryset = self.get_queryset()
+        
+        # Filter nach series_identifier
+        series_identifier = request.query_params.get('series_identifier')
+        if series_identifier:
+            queryset = queryset.filter(series_identifier=series_identifier)
+        
+        # Expand Parameter verarbeiten
+        expand = request.query_params.get('expand', '')
+        if expand:
+            expand_fields = expand.split(',')
+            if 'patient' in expand_fields:
+                queryset = queryset.select_related('patient')
+            if 'practitioner' in expand_fields:
+                queryset = queryset.select_related('practitioner')
+            if 'treatment' in expand_fields:
+                queryset = queryset.select_related('treatment')
+            if 'room' in expand_fields:
+                queryset = queryset.select_related('room')
+            if 'prescription' in expand_fields:
+                queryset = queryset.select_related('prescription')
+        
+        # Sortierung nach Datum
+        queryset = queryset.order_by('appointment_date')
+        
+        try:
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            import traceback
+            print(f"Error in AppointmentViewSet.list: {str(e)}")
+            print(f"Traceback: {traceback.format_exc()}")
+            return Response(
+                {'error': f'Fehler beim Laden der Termine: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     @action(detail=False, methods=['post'])
     def create_series(self, request):
@@ -359,6 +445,118 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.error(f"Fehler beim Erstellen des Termins: {str(e)}")
             raise serializers.ValidationError(str(e))
+
+    @action(detail=False, methods=['post'], url_path='create_series')
+    def create_appointment_series(self, request):
+        """Erstellt eine Terminserie mit dem PrescriptionSeriesService"""
+        try:
+            prescription_id = request.data.get('prescription')
+            start_date = datetime.fromisoformat(request.data.get('start_date').replace('Z', '+00:00'))
+            end_date = datetime.fromisoformat(request.data.get('end_date').replace('Z', '+00:00'))
+            practitioner_id = request.data.get('practitioner')
+            room_id = request.data.get('room')
+            frequency = request.data.get('frequency', 'weekly_1')
+            duration_minutes = request.data.get('duration_minutes', 30)
+            notes = request.data.get('notes', '')
+
+            prescription = Prescription.objects.get(id=prescription_id)
+            practitioner = Practitioner.objects.get(id=practitioner_id)
+            room = Room.objects.get(id=room_id) if room_id else None
+
+            series_identifier, appointments = PrescriptionSeriesService.create_appointment_series(
+                prescription=prescription,
+                start_date=start_date,
+                end_date=end_date,
+                practitioner=practitioner,
+                room=room,
+                frequency=frequency,
+                duration_minutes=duration_minutes,
+                notes=notes
+            )
+
+            serializer = AppointmentSerializer(appointments, many=True)
+            return Response({
+                'series_identifier': series_identifier,
+                'appointments': serializer.data,
+                'message': f'Terminserie erfolgreich erstellt: {len(appointments)} Termine'
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            logger.error(f"Fehler beim Erstellen der Terminserie: {str(e)}")
+            return Response(
+                {'error': f'Fehler beim Erstellen der Terminserie: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @action(detail=False, methods=['post'], url_path='extend_series')
+    def extend_appointment_series(self, request):
+        """Verlängert eine bestehende Terminserie"""
+        try:
+            prescription_id = request.data.get('prescription')
+            additional_sessions = request.data.get('additional_sessions')
+            practitioner_id = request.data.get('practitioner')
+            room_id = request.data.get('room')
+            frequency = request.data.get('frequency')
+            duration_minutes = request.data.get('duration_minutes')
+            notes = request.data.get('notes', '')
+
+            prescription = Prescription.objects.get(id=prescription_id)
+            practitioner = Practitioner.objects.get(id=practitioner_id) if practitioner_id else None
+            room = Room.objects.get(id=room_id) if room_id else None
+
+            new_appointments = PrescriptionSeriesService.extend_appointment_series(
+                prescription=prescription,
+                additional_sessions=additional_sessions,
+                practitioner=practitioner,
+                room=room,
+                frequency=frequency,
+                duration_minutes=duration_minutes,
+                notes=notes
+            )
+
+            serializer = AppointmentSerializer(new_appointments, many=True)
+            return Response({
+                'appointments': serializer.data,
+                'message': f'Serie erfolgreich verlängert: {len(new_appointments)} neue Termine'
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            logger.error(f"Fehler beim Verlängern der Terminserie: {str(e)}")
+            return Response(
+                {'error': f'Fehler beim Verlängern der Terminserie: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @action(detail=True, methods=['post'], url_path='cancel_series/(?P<series_identifier>[^/.]+)')
+    def cancel_series(self, request, series_identifier, pk=None):
+        """Storniert alle zukünftigen Termine einer Serie"""
+        try:
+            cancelled_count = PrescriptionSeriesService.cancel_series(series_identifier)
+            return Response({
+                'message': f'{cancelled_count} Termine wurden storniert',
+                'cancelled_count': cancelled_count
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Fehler beim Stornieren der Serie: {str(e)}")
+            return Response(
+                {'error': f'Fehler beim Stornieren der Serie: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @action(detail=False, methods=['get'], url_path='series/(?P<series_identifier>[^/.]+)')
+    def get_series_info(self, request, series_identifier):
+        """Gibt Informationen über eine Terminserie zurück"""
+        try:
+            series_info = PrescriptionSeriesService.get_series_info(series_identifier)
+            return Response(series_info, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Fehler beim Laden der Serien-Informationen: {str(e)}")
+            return Response(
+                {'error': f'Fehler beim Laden der Serien-Informationen: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 class SurchargeViewSet(viewsets.ModelViewSet):
     queryset = Surcharge.objects.all()
@@ -555,17 +753,8 @@ class PrescriptionViewSet(viewsets.ModelViewSet):
         else:
             queryset = Prescription.objects.all()
         
-        # Zusätzliche Joins für Performance
-        queryset = queryset.select_related(
-            'patient',
-            'doctor',
-            'treatment_1',
-            'treatment_2',
-            'treatment_3',
-            'patient_insurance',
-            'patient_insurance__insurance_provider',
-            'diagnosis_code'
-        )
+        # Verwende QueryOptimizer für optimierte Queries
+        queryset = QueryOptimizer.optimize_prescription_queryset(queryset)
         
         # Optionale Filter hier...
         patient_id = self.request.query_params.get('patient_id', None)
@@ -617,6 +806,49 @@ class PrescriptionViewSet(viewsets.ModelViewSet):
             return Response(
                 {"detail": str(e)},
                 status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @action(detail=True, methods=['post'])
+    def create_follow_up(self, request, pk=None):
+        """Erstellt eine Folgeverordnung"""
+        try:
+            prescription = self.get_object()
+            
+            # Prüfe ob eine Folgeverordnung erstellt werden kann
+            if not prescription.can_create_follow_up():
+                return Response(
+                    {'error': 'Diese Verordnung kann nicht verlängert werden.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Erstelle Folgeverordnung
+            follow_up_data = request.data.copy()
+            follow_up_prescription = prescription.create_follow_up_prescription(**follow_up_data)
+            
+            serializer = self.get_serializer(follow_up_prescription)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            logger.error(f"Fehler beim Erstellen der Folgeverordnung: {str(e)}")
+            return Response(
+                {'error': f'Fehler beim Erstellen der Folgeverordnung: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['get'])
+    def follow_ups(self, request, pk=None):
+        """Gibt alle Folgeverordnungen zurück"""
+        try:
+            prescription = self.get_object()
+            follow_ups = prescription.get_all_follow_ups()
+            serializer = self.get_serializer(follow_ups, many=True)
+            return Response(serializer.data)
+            
+        except Exception as e:
+            logger.error(f"Fehler beim Laden der Folgeverordnungen: {str(e)}")
+            return Response(
+                {'error': f'Fehler beim Laden der Folgeverordnungen: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 class WorkingHourViewSet(viewsets.ModelViewSet):
@@ -772,16 +1004,15 @@ class DashboardStatsView(APIView):
             # Patienten-Statistiken
             patient_stats = {
                 'total': Patient.objects.count(),
-                'active': Patient.objects.filter(is_active=True).count(),
                 'newThisMonth': Patient.objects.filter(created_at__gte=month_ago).count(),
             }
 
             # Termin-Statistiken
             appointment_stats = {
                 'total': Appointment.objects.count(),
-                'upcoming': Appointment.objects.filter(start_time__gte=now).count(),
+                'upcoming': Appointment.objects.filter(appointment_date__gte=now).count(),
                 'thisWeek': Appointment.objects.filter(
-                    start_time__range=(now, now + timedelta(days=7))
+                    appointment_date__range=(now, now + timedelta(days=7))
                 ).count(),
                 'noShowRate': self._calculate_no_show_rate()
             }
@@ -822,30 +1053,29 @@ class DashboardStatsView(APIView):
             )
 
     def _calculate_no_show_rate(self):
-        total = Appointment.objects.filter(start_time__lt=timezone.now()).count()
+        total = Appointment.objects.filter(appointment_date__lt=timezone.now()).count()
         if total == 0:
             return 0
         no_shows = Appointment.objects.filter(
-            start_time__lt=timezone.now(),
+            appointment_date__lt=timezone.now(),
             status='no_show'
         ).count()
         return round((no_shows / total) * 100, 2)
 
     def _get_most_common_treatments(self):
-        return dict(
-            Appointment.objects.values('treatment__name')
-            .annotate(count=Count('id'))
+        treatments = Appointment.objects.values('treatment__treatment_name')\
+            .annotate(count=Count('id'))\
             .order_by('-count')[:5]
-        )
+        return {item['treatment__treatment_name']: item['count'] for item in treatments if item['treatment__treatment_name']}
 
     def _get_insurance_distribution(self):
         distribution = (
-            Patient.objects.values('insurance_provider__name')
+            Patient.objects.values('insurances__insurance_provider__name')
             .annotate(count=Count('id'))
-            .values('insurance_provider__name', 'count')
+            .filter(insurances__insurance_provider__name__isnull=False)
         )
         return {
-            item['insurance_provider__name']: item['count'] 
+            item['insurances__insurance_provider__name']: item['count'] 
             for item in distribution
         }
 
@@ -854,16 +1084,23 @@ class DashboardStatsView(APIView):
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         last_month_start = (month_start - timedelta(days=1)).replace(day=1)
         
+        # Verwende BillingItems für Finanzstatistiken
+        current_month_revenue = BillingItem.objects.filter(
+            created_at__gte=month_start
+        ).aggregate(total=Sum('insurance_amount'))['total'] or 0
+        
+        last_month_revenue = BillingItem.objects.filter(
+            created_at__range=(last_month_start, month_start)
+        ).aggregate(total=Sum('insurance_amount'))['total'] or 0
+        
+        outstanding_amount = BillingItem.objects.filter(
+            is_billed=False
+        ).aggregate(total=Sum('insurance_amount'))['total'] or 0
+        
         return {
-            'currentMonth': Appointment.objects.filter(
-                start_time__gte=month_start
-            ).aggregate(total=Sum('treatment__price'))['total'] or 0,
-            'lastMonth': Appointment.objects.filter(
-                start_time__range=(last_month_start, month_start)
-            ).aggregate(total=Sum('treatment__price'))['total'] or 0,
-            'outstanding': Appointment.objects.filter(
-                payment_status='pending'
-            ).aggregate(total=Sum('treatment__price'))['total'] or 0
+            'currentMonth': float(current_month_revenue),
+            'lastMonth': float(last_month_revenue),
+            'outstanding': float(outstanding_amount)
         }
 
 class UserDetailView(APIView):
@@ -916,6 +1153,10 @@ def get_current_user(request):
 class DiagnosisGroupViewSet(viewsets.ModelViewSet):
     queryset = DiagnosisGroup.objects.all()
     serializer_class = DiagnosisGroupSerializer
+
+class LocalHolidayViewSet(viewsets.ModelViewSet):
+    queryset = LocalHoliday.objects.all()
+    serializer_class = LocalHolidaySerializer
 
 class AppointmentSeriesViewSet(viewsets.ViewSet):
     def preview(self, request):
@@ -1366,4 +1607,622 @@ class AbsenceViewSet(viewsets.ModelViewSet):
     queryset = Absence.objects.all()
     serializer_class = AbsenceSerializer
     filterset_fields = ['practitioner', 'start_date', 'end_date', 'is_approved']
+
+class WaitlistViewSet(viewsets.ModelViewSet):
+    queryset = Waitlist.objects.all()
+    serializer_class = WaitlistSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Filtert Wartelisten-Einträge nach Benutzerberechtigungen"""
+        user = self.request.user
+        queryset = super().get_queryset().select_related(
+            'patient', 'practitioner', 'treatment', 'prescription'
+        )
+
+        # Wenn der Benutzer ein Admin/Superuser ist, zeige alle Einträge
+        if user.is_superuser or user.is_admin:
+            return queryset
+            
+        # Wenn der Benutzer ein Therapeut ist, zeige nur seine eigenen Einträge
+        if user.is_therapist:
+            practitioner = Practitioner.objects.filter(
+                first_name=user.first_name,
+                last_name=user.last_name
+            ).first()
+            if practitioner:
+                return queryset.filter(practitioner=practitioner)
+            
+        # Für normale Benutzer (Verwaltung) zeige alle Einträge
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        """Erweiterte Liste mit Filterung"""
+        queryset = self.get_queryset()
+        
+        # Filter nach Status
+        status = request.query_params.get('status')
+        if status:
+            queryset = queryset.filter(status=status)
+        
+        # Filter nach Priorität
+        priority = request.query_params.get('priority')
+        if priority:
+            queryset = queryset.filter(priority=priority)
+        
+        # Sortierung nach Priorität und Erstellungsdatum
+        queryset = queryset.order_by('-priority', 'created_at')
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+class PaymentViewSet(viewsets.ModelViewSet):
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = Payment.objects.select_related(
+            'patient_invoice__patient',
+            'copay_invoice__patient',
+            'private_invoice__patient',
+            'created_by'
+        ).order_by('-payment_date', '-created_at')
+        
+        # Filter nach Datum
+        start_date = self.request.query_params.get('start_date')
+        end_date = self.request.query_params.get('end_date')
+        
+        if start_date:
+            queryset = queryset.filter(payment_date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(payment_date__lte=end_date)
+        
+        # Filter nach Zahlungsart
+        payment_method = self.request.query_params.get('payment_method')
+        if payment_method:
+            queryset = queryset.filter(payment_method=payment_method)
+        
+        # Filter nach Zahlungstyp
+        payment_type = self.request.query_params.get('payment_type')
+        if payment_type:
+            queryset = queryset.filter(payment_type=payment_type)
+        
+        return queryset
+    
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        """Zusammenfassung der Zahlungen"""
+        queryset = self.get_queryset()
+        
+        # Zeitraum
+        period = request.query_params.get('period', 'month')
+        now = timezone.now()
+        
+        if period == 'week':
+            start_date = now - timedelta(days=7)
+        elif period == 'month':
+            start_date = now - timedelta(days=30)
+        elif period == 'quarter':
+            start_date = now - timedelta(days=90)
+        elif period == 'year':
+            start_date = now - timedelta(days=365)
+        else:
+            start_date = now - timedelta(days=30)
+        
+        # Filter nach Zeitraum
+        period_payments = queryset.filter(payment_date__gte=start_date)
+        
+        # Statistiken
+        total_amount = period_payments.aggregate(total=Sum('amount'))['total'] or 0
+        payment_count = period_payments.count()
+        
+        # Nach Zahlungsart
+        by_method = period_payments.values('payment_method').annotate(
+            count=Count('id'),
+            total=Sum('amount')
+        ).order_by('-total')
+        
+        # Nach Zahlungstyp
+        by_type = period_payments.values('payment_type').annotate(
+            count=Count('id'),
+            total=Sum('amount')
+        ).order_by('-total')
+        
+        # Tägliche Summen
+        daily_totals = period_payments.values('payment_date').annotate(
+            total=Sum('amount')
+        ).order_by('payment_date')
+        
+        return Response({
+            'period': period,
+            'total_amount': float(total_amount),
+            'payment_count': payment_count,
+            'by_method': [
+                {
+                    'method': item['payment_method'],
+                    'method_display': dict(Payment.PAYMENT_METHODS)[item['payment_method']],
+                    'count': item['count'],
+                    'total': float(item['total'])
+                } for item in by_method
+            ],
+            'by_type': [
+                {
+                    'type': item['payment_type'],
+                    'type_display': dict(Payment.PAYMENT_TYPES)[item['payment_type']],
+                    'count': item['count'],
+                    'total': float(item['total'])
+                } for item in by_type
+            ],
+            'daily_totals': [
+                {
+                    'date': item['payment_date'].strftime('%Y-%m-%d'),
+                    'total': float(item['total'])
+                } for item in daily_totals
+            ]
+        })
+    
+    @action(detail=False, methods=['post'])
+    def bulk_create(self, request):
+        """Mehrere Zahlungen auf einmal erstellen"""
+        payments_data = request.data.get('payments', [])
+        created_payments = []
+        errors = []
+        
+        for i, payment_data in enumerate(payments_data):
+            try:
+                serializer = self.get_serializer(data=payment_data)
+                serializer.is_valid(raise_exception=True)
+                payment = serializer.save()
+                created_payments.append(payment)
+            except Exception as e:
+                errors.append({
+                    'index': i,
+                    'data': payment_data,
+                    'error': str(e)
+                })
+        
+        return Response({
+            'created_count': len(created_payments),
+            'error_count': len(errors),
+            'errors': errors,
+            'payments': PaymentSerializer(created_payments, many=True).data
+        })
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def process_prescription_ocr(request):
+    """
+    Verarbeitet ein Rezept-Bild/PDF mit OCR und extrahiert die Daten
+    """
+    try:
+        if 'file' not in request.FILES:
+            return Response(
+                {'error': 'Keine Datei hochgeladen'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        uploaded_file = request.FILES['file']
+        
+        # Dateityp validieren
+        allowed_types = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf']
+        if uploaded_file.content_type not in allowed_types:
+            return Response(
+                {'error': 'Nicht unterstützter Dateityp. Erlaubt: JPG, PNG, PDF'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Dateigröße prüfen (max 10MB)
+        if uploaded_file.size > 10 * 1024 * 1024:
+            return Response(
+                {'error': 'Datei zu groß. Maximale Größe: 10MB'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Temporäre Datei erstellen im aktuellen Verzeichnis
+        import uuid
+        temp_file_path = os.path.join(os.getcwd(), f"ocr_upload_{uuid.uuid4().hex}_{uploaded_file.name}")
+        
+        try:
+            with open(temp_file_path, 'wb') as temp_file:
+                for chunk in uploaded_file.chunks():
+                    temp_file.write(chunk)
+            
+            # Berechtigungen setzen
+            os.chmod(temp_file_path, 0o644)
+            logger.info(f"Temporäre Datei erstellt: {temp_file_path}")
+        except Exception as e:
+            logger.error(f"Fehler beim Erstellen der temporären Datei: {str(e)}")
+            raise
+        
+        try:
+            # OCR verarbeiten
+            ocr_service = OCRService()
+            extracted_data = ocr_service.process_prescription_file(temp_file_path)
+            
+            # Daten validieren
+            validation = ocr_service.validate_extracted_data(extracted_data)
+            
+            # Datei speichern
+            file_path = f'prescriptions/ocr_uploads/{uploaded_file.name}'
+            saved_path = default_storage.save(file_path, uploaded_file)
+            
+            # Antwort vorbereiten
+            response_data = {
+                'extracted_data': extracted_data,
+                'validation': validation,
+                'uploaded_file': saved_path,
+                'confidence_score': extracted_data.get('confidence_score', 0.0)
+            }
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        finally:
+            # Temporäre Datei löschen
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+                
+    except Exception as e:
+        logger.error(f"Fehler bei OCR-Verarbeitung: {str(e)}")
+        return Response(
+            {'error': f'Fehler bei der OCR-Verarbeitung: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_prescription_from_ocr(request):
+    """
+    Erstellt eine neue Verordnung aus OCR-Daten mit Patienten- und Arzt-Matching
+    """
+    try:
+        data = request.data
+        
+        # OCR-Daten extrahieren
+        ocr_data = data.get('ocr_data', {})
+        uploaded_file = data.get('uploaded_file')
+        
+        # Patienten finden oder erstellen
+        patient_name = ocr_data.get('patient_name', '')
+        patient_birth = ocr_data.get('patient_birth', '')
+        
+        if patient_name:
+            first_name, last_name = patient_name.split(' ', 1) if ' ' in patient_name else (patient_name, '')
+            
+            # Patienten suchen (exakte Übereinstimmung)
+            patient = Patient.objects.filter(
+                first_name__iexact=first_name,
+                last_name__iexact=last_name
+            ).first()
+            
+            # Wenn nicht gefunden, nach ähnlichen Namen suchen
+            if not patient:
+                similar_patients = Patient.objects.filter(
+                    Q(first_name__icontains=first_name) | Q(last_name__icontains=last_name)
+                )[:5]
+                
+                if similar_patients.exists():
+                    # Ähnliche Patienten gefunden - Vorschläge zurückgeben
+                    suggestions = []
+                    for p in similar_patients:
+                        suggestions.append({
+                            'id': p.id,
+                            'name': f"{p.first_name} {p.last_name}",
+                            'birth_date': p.dob.strftime('%d.%m.%Y') if p.dob else None,
+                            'match_score': _calculate_name_similarity(patient_name, f"{p.first_name} {p.last_name}")
+                        })
+                    
+                    return Response({
+                        'error': 'Patient nicht gefunden',
+                        'suggestions': suggestions,
+                        'action': 'select_patient_or_create_new',
+                        'new_patient_data': {
+                            'first_name': first_name,
+                            'last_name': last_name,
+                            'birth_date': patient_birth
+                        }
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Keine ähnlichen Patienten gefunden - neuen erstellen
+                try:
+                    dob = datetime.strptime(patient_birth, '%d.%m.%Y').date() if patient_birth else datetime.now().date()
+                except ValueError:
+                    dob = datetime.now().date()
+                
+                patient = Patient.objects.create(
+                    first_name=first_name,
+                    last_name=last_name,
+                    dob=dob,
+                    email='',
+                    phone_number='',
+                    street_address='',
+                    city='',
+                    postal_code='',
+                    country='Deutschland'
+                )
+        else:
+            return Response(
+                {'error': 'Patientenname konnte nicht erkannt werden'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Arzt finden oder erstellen
+        doctor_name = ocr_data.get('doctor_name', '')
+        bsnr = ocr_data.get('bsnr', '')
+        lanr = ocr_data.get('lanr', '')
+        
+        if doctor_name:
+            first_name, last_name = doctor_name.split(' ', 1) if ' ' in doctor_name else (doctor_name, '')
+            
+            # Arzt suchen (exakte Übereinstimmung)
+            doctor = Doctor.objects.filter(
+                first_name__iexact=first_name,
+                last_name__iexact=last_name
+            ).first()
+            
+            # Wenn nicht gefunden, nach ähnlichen Namen suchen
+            if not doctor:
+                similar_doctors = Doctor.objects.filter(
+                    Q(first_name__icontains=first_name) | Q(last_name__icontains=last_name)
+                )[:5]
+                
+                if similar_doctors.exists():
+                    # Ähnliche Ärzte gefunden - Vorschläge zurückgeben
+                    suggestions = []
+                    for d in similar_doctors:
+                        suggestions.append({
+                            'id': d.id,
+                            'name': f"{d.first_name} {d.last_name}",
+                            'license_number': d.license_number,
+                            'match_score': _calculate_name_similarity(doctor_name, f"{d.first_name} {d.last_name}")
+                        })
+                    
+                    return Response({
+                        'error': 'Arzt nicht gefunden',
+                        'suggestions': suggestions,
+                        'action': 'select_doctor_or_create_new',
+                        'new_doctor_data': {
+                            'first_name': first_name,
+                            'last_name': last_name,
+                            'bsnr': bsnr,
+                            'lanr': lanr
+                        }
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Keine ähnlichen Ärzte gefunden - neuen erstellen
+                doctor = Doctor.objects.create(
+                    first_name=first_name,
+                    last_name=last_name,
+                    license_number=lanr or '',
+                    specialization='',
+                    phone_number='',
+                    email='',
+                    address=''
+                )
+        else:
+            # Standard-Arzt verwenden
+            doctor = Doctor.objects.first()
+        
+        # ICD-Code finden
+        diagnosis_code = None
+        if ocr_data.get('diagnosis_code'):
+            diagnosis_code = ICDCode.objects.filter(
+                code__icontains=ocr_data['diagnosis_code']
+            ).first()
+        
+        # Behandlungseinheiten berechnen
+        total_sessions = 0
+        for i in range(1, 4):
+            sessions = ocr_data.get(f'sessions_{i}', 0)
+            if sessions:
+                total_sessions += int(sessions)
+        
+        if total_sessions == 0:
+            total_sessions = 1  # Standard
+        
+        # Verordnung erstellen
+        prescription_data = {
+            'patient': patient.id,
+            'doctor': doctor.id if doctor else None,
+            'diagnosis_code': diagnosis_code.id if diagnosis_code else None,
+            'number_of_sessions': total_sessions,
+            'therapy_frequency_type': _map_frequency(ocr_data.get('frequency', '')),
+            'prescription_date': datetime.strptime(ocr_data.get('prescription_date', datetime.now().strftime('%d.%m.%Y')), '%d.%m.%Y').date() if ocr_data.get('prescription_date') else datetime.now().date(),
+            'status': 'Open',
+            'is_urgent': ocr_data.get('urgent', '').lower() == 'ja',
+            'requires_home_visit': ocr_data.get('home_visit', '').lower() == 'ja',
+            'therapy_report_required': ocr_data.get('report_required', '').lower() in ['ja', 'erforderlich'],
+            'therapy_goals': ocr_data.get('therapy_goals', '')
+        }
+        
+        # PDF-Dokument hinzufügen
+        if uploaded_file:
+            prescription_data['pdf_document'] = uploaded_file
+        
+        # Verordnung speichern
+        serializer = PrescriptionSerializer(data=prescription_data)
+        if serializer.is_valid():
+            prescription = serializer.save()
+            return Response(
+                {
+                    'message': 'Verordnung erfolgreich erstellt',
+                    'prescription_id': prescription.id,
+                    'extracted_data': ocr_data,
+                    'patient_id': patient.id,
+                    'doctor_id': doctor.id if doctor else None
+                },
+                status=status.HTTP_201_CREATED
+            )
+        else:
+            return Response(
+                {'error': 'Fehler beim Erstellen der Verordnung', 'details': serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+    except Exception as e:
+        logger.error(f"Fehler beim Erstellen der Verordnung aus OCR: {str(e)}")
+        return Response(
+            {'error': f'Fehler beim Erstellen der Verordnung: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+def _calculate_name_similarity(name1: str, name2: str) -> float:
+    """
+    Berechnet die Ähnlichkeit zwischen zwei Namen
+    """
+    from difflib import SequenceMatcher
+    return SequenceMatcher(None, name1.lower(), name2.lower()).ratio()
+
+def _map_frequency(frequency: str) -> str:
+    """
+    Mappt OCR-Frequenz auf interne Frequenz-Codes
+    """
+    frequency = frequency.lower()
+    if 'woche' in frequency:
+        if '1x' in frequency:
+            return 'weekly_1'
+        elif '2x' in frequency:
+            return 'weekly_2'
+        elif '3x' in frequency:
+            return 'weekly_3'
+        elif '4x' in frequency:
+            return 'weekly_4'
+        elif '5x' in frequency:
+            return 'weekly_5'
+    elif 'monat' in frequency:
+        if '1x' in frequency:
+            return 'monthly_1'
+        elif '2x' in frequency:
+            return 'monthly_2'
+        elif '3x' in frequency:
+            return 'monthly_3'
+        elif '4x' in frequency:
+            return 'monthly_4'
+    
+    return 'weekly_1'  # Standard
+
+@api_view(['GET', 'PUT'])
+@permission_classes([IsAuthenticated])
+def settings_view(request):
+    """
+    Allgemeiner Settings-Endpunkt für alle Einstellungen
+    """
+    try:
+        if request.method == 'GET':
+            # Alle verfügbaren Settings laden
+            calendar_settings = CalendarSettings.objects.first()
+            practice_settings = PracticeSettings.objects.first()
+            
+            # Standard-Settings erstellen, falls keine vorhanden
+            if not calendar_settings:
+                calendar_settings = CalendarSettings.objects.create(
+                    default_session_duration=30,
+                    break_between_sessions=15,
+                    max_appointments_per_day=20
+                )
+            if not practice_settings:
+                practice_settings = PracticeSettings.objects.create(
+                    practice_name="Meine Praxis",
+                    license_number="12345",
+                    street_address="Musterstraße 1",
+                    city="Musterstadt",
+                    postal_code="12345",
+                    country="Deutschland",
+                    phone_number="0123456789",
+                    email="info@praxis.de",
+                    opening_time="08:00:00",
+                    closing_time="18:00:00",
+                    days_open="Montag-Freitag"
+                )
+            
+            # Settings zusammenfassen
+            settings_data = {
+                'general': {
+                    'practice_name': practice_settings.practice_name if practice_settings else '',
+                    'practice_address': f"{practice_settings.street_address}, {practice_settings.postal_code} {practice_settings.city}" if practice_settings else '',
+                    'practice_phone': practice_settings.phone_number if practice_settings else '',
+                    'practice_email': practice_settings.email if practice_settings else '',
+                },
+                'therapy': {
+                    'default_session_duration': calendar_settings.default_session_duration if calendar_settings else 30,
+                    'break_between_sessions': calendar_settings.break_between_sessions if calendar_settings else 15,
+                    'max_appointments_per_day': calendar_settings.max_appointments_per_day if calendar_settings else 20,
+                },
+                'notifications': {
+                    'email_notifications': practice_settings.email_notifications if practice_settings else True,
+                    'sms_notifications': practice_settings.sms_notifications if practice_settings else False,
+                    'reminder_days_before': practice_settings.reminder_days_before if practice_settings else 1,
+                },
+                'billing': {
+                    'auto_billing': practice_settings.auto_billing if practice_settings else False,
+                    'billing_cycle_days': practice_settings.billing_cycle_days if practice_settings else 30,
+                    'default_payment_terms': practice_settings.default_payment_terms if practice_settings else 14,
+                }
+            }
+            
+            return Response(settings_data)
+            
+        elif request.method == 'PUT':
+            # Settings aktualisieren
+            data = request.data
+            
+            calendar_settings = CalendarSettings.objects.first()
+            practice_settings = PracticeSettings.objects.first()
+            
+            # Standard-Settings erstellen, falls keine vorhanden
+            if not calendar_settings:
+                calendar_settings = CalendarSettings.objects.create()
+            if not practice_settings:
+                practice_settings = PracticeSettings.objects.create()
+            
+            # Calendar Settings aktualisieren
+            if 'therapy' in data:
+                therapy_data = data['therapy']
+                if 'default_session_duration' in therapy_data:
+                    calendar_settings.default_session_duration = therapy_data['default_session_duration']
+                if 'break_between_sessions' in therapy_data:
+                    calendar_settings.break_between_sessions = therapy_data['break_between_sessions']
+                if 'max_appointments_per_day' in therapy_data:
+                    calendar_settings.max_appointments_per_day = therapy_data['max_appointments_per_day']
+                calendar_settings.save()
+            
+            # Practice Settings aktualisieren
+            if 'general' in data:
+                general_data = data['general']
+                if 'practice_name' in general_data:
+                    practice_settings.practice_name = general_data['practice_name']
+                if 'practice_phone' in general_data:
+                    practice_settings.phone_number = general_data['practice_phone']
+                if 'practice_email' in general_data:
+                    practice_settings.email = general_data['practice_email']
+                # Adresse wird nicht direkt gespeichert, da sie aus mehreren Feldern besteht
+            
+            if 'notifications' in data:
+                notification_data = data['notifications']
+                if 'email_notifications' in notification_data:
+                    practice_settings.email_notifications = notification_data['email_notifications']
+                if 'sms_notifications' in notification_data:
+                    practice_settings.sms_notifications = notification_data['sms_notifications']
+                if 'reminder_days_before' in notification_data:
+                    practice_settings.reminder_days_before = notification_data['reminder_days_before']
+            
+            if 'billing' in data:
+                billing_data = data['billing']
+                if 'auto_billing' in billing_data:
+                    practice_settings.auto_billing = billing_data['auto_billing']
+                if 'billing_cycle_days' in billing_data:
+                    practice_settings.billing_cycle_days = billing_data['billing_cycle_days']
+                if 'default_payment_terms' in billing_data:
+                    practice_settings.default_payment_terms = billing_data['default_payment_terms']
+            
+            practice_settings.save()
+            
+            return Response({'message': 'Einstellungen erfolgreich gespeichert'})
+            
+    except Exception as e:
+        logger.error(f"Fehler bei Settings-Operation: {str(e)}")
+        return Response(
+            {'error': f'Fehler bei der Settings-Operation: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 

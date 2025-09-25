@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import {
-  Box, Typography, Paper, TextField, Button, MenuItem, Grid, Alert
+  Box, Typography, Paper, TextField, Button, MenuItem, Grid, Alert, 
+  FormControlLabel, Checkbox, Divider, Card, CardContent
 } from '@mui/material';
 
 function TreatmentNew() {
@@ -14,7 +15,13 @@ function TreatmentNew() {
     duration_minutes: 30,
     category: '',
     is_self_pay: false,
-    self_pay_price: ''
+    self_pay_price: '',
+    // LEGS-Code Felder
+    legs_code: '',
+    accounting_code: '',
+    tariff_indicator: '',
+    prescription_type_indicator: '',
+    is_telemedicine: false
   });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -58,6 +65,14 @@ function TreatmentNew() {
       }
       if (formData.is_self_pay && !formData.self_pay_price) {
         throw new Error('Für Selbstzahler-Behandlungen muss ein Preis angegeben werden');
+      }
+      
+      // LEGS-Code Validierung
+      if (formData.accounting_code && formData.accounting_code.length !== 3) {
+        throw new Error('Abrechnungscode (AC) muss 3-stellig sein');
+      }
+      if (formData.tariff_indicator && formData.tariff_indicator.length !== 2) {
+        throw new Error('Tarifkennzeichen (TK) muss 2-stellig sein');
       }
 
       const response = await api.post('/treatments/', formData);
@@ -153,18 +168,101 @@ function TreatmentNew() {
               />
             </Grid>
             <Grid item xs={12}>
-              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                <input
-                  type="checkbox"
-                  name="is_self_pay"
-                  checked={formData.is_self_pay}
-                  onChange={handleChange}
-                  id="is_self_pay"
-                />
-                <label htmlFor="is_self_pay">
-                  Selbstzahler-Behandlung (ohne Verordnung möglich)
-                </label>
-              </Box>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    name="is_self_pay"
+                    checked={formData.is_self_pay}
+                    onChange={handleChange}
+                  />
+                }
+                label="Selbstzahler-Behandlung (ohne Verordnung möglich)"
+              />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <Divider sx={{ my: 2 }}>
+                <Typography variant="h6" color="primary">
+                  GKV-Abrechnung (LEGS-Code)
+                </Typography>
+              </Divider>
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="LEGS-Code (AC.TK)"
+                name="legs_code"
+                value={formData.legs_code}
+                onChange={handleChange}
+                fullWidth
+                placeholder="z.B. 123.45"
+                helperText="Vollständiger Leistungserbringergruppenschlüssel"
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="Abrechnungscode (AC)"
+                name="accounting_code"
+                value={formData.accounting_code}
+                onChange={handleChange}
+                fullWidth
+                placeholder="z.B. 123"
+                inputProps={{ maxLength: 3 }}
+                helperText="3-stelliger Abrechnungscode"
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="Tarifkennzeichen (TK)"
+                name="tariff_indicator"
+                value={formData.tariff_indicator}
+                onChange={handleChange}
+                fullWidth
+                placeholder="z.B. 45"
+                inputProps={{ maxLength: 2 }}
+                helperText="2-stelliges Tarifkennzeichen"
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <TextField
+                label="Verordnungsartkennzeichen"
+                name="prescription_type_indicator"
+                value={formData.prescription_type_indicator}
+                onChange={handleChange}
+                fullWidth
+                placeholder="z.B. VKZ 10"
+                helperText="Kennzeichen für die Verordnungsart"
+              />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    name="is_telemedicine"
+                    checked={formData.is_telemedicine}
+                    onChange={handleChange}
+                  />
+                }
+                label="Telemedizinische Leistung"
+              />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <Card variant="outlined">
+                <CardContent>
+                  <Typography variant="subtitle2" color="primary" gutterBottom>
+                    LEGS-Code Info
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Der LEGS-Code (Leistungserbringergruppenschlüssel) ist erforderlich für die GKV-Abrechnung. 
+                    Er besteht aus einem 3-stelligen Abrechnungscode (AC) und einem 2-stelligen Tarifkennzeichen (TK).
+                  </Typography>
+                </CardContent>
+              </Card>
             </Grid>
             <Grid item xs={12}>
               <Box sx={{ display: 'flex', gap: 2 }}>

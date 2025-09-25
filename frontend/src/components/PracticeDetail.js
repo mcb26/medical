@@ -77,7 +77,7 @@ const PracticeDetail = () => {
     const fetchPractice = async () => {
         try {
             // Hole die einzige Praxisinstanz
-            const response = await api.get('practice/instance/');
+            const response = await api.get('practice/get_instance/');
             setPractice(response.data);
             setLoading(false);
         } catch (error) {
@@ -99,7 +99,7 @@ const PracticeDetail = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            await api.put('practice/instance/', practice);
+            await api.put('practice/update_instance/', practice);
             setSuccess('Praxisdaten erfolgreich gespeichert');
             setError('');
         } catch (error) {

@@ -100,6 +100,7 @@ function InsuranceProviderList() {
           rows={insuranceProviders}
           columns={columns}
           loading={loading}
+          rowCount={insuranceProviders.length}
           slots={{
             toolbar: GridToolbar,
           }}

@@ -43,32 +43,30 @@ function Settings() {
   
   const defaultSettings = {
     general: {
-      companyName: '',
-      address: '',
-      phone: '',
-      email: '',
-      logo: '',
+      practice_name: '',
+      practice_address: '',
+      practice_phone: '',
+      practice_email: '',
       defaultLanguage: 'de',
       timeZone: 'Europe/Berlin'
     },
     therapy: {
-      maxSessionsPerDay: 8,
-      defaultSessionDuration: 45,
-      allowOverlappingSessions: false,
+      max_appointments_per_day: 20,
+      default_session_duration: 30,
+      break_between_sessions: 15,
       requireTherapyReport: false
     },
     notifications: {
-      enableEmailNotifications: true,
-      enableSMSNotifications: false,
-      reminderTimeBeforeSession: 24,
+      email_notifications: true,
+      sms_notifications: false,
+      reminder_days_before: 1,
       sendConfirmationEmails: true
     },
     billing: {
-      currency: 'EUR',
-      taxRate: 19,
-      invoicePrefix: 'INV-',
-      paymentTerms: 30,
-      enableAutomaticInvoicing: true
+      auto_billing: false,
+      billing_cycle_days: 30,
+      default_payment_terms: 14,
+      currency: 'EUR'
     }
   };
   
@@ -199,8 +197,8 @@ function Settings() {
                 <TextField
                   fullWidth
                   label="Praxisname"
-                  value={settings.general.companyName}
-                  onChange={(e) => handleChange('general', 'companyName', e.target.value)}
+                  value={settings.general.practice_name}
+                  onChange={(e) => handleChange('general', 'practice_name', e.target.value)}
                   margin="normal"
                 />
                 <TextField
@@ -208,22 +206,22 @@ function Settings() {
                   label="Adresse"
                   multiline
                   rows={3}
-                  value={settings.general.address}
-                  onChange={(e) => handleChange('general', 'address', e.target.value)}
+                  value={settings.general.practice_address}
+                  onChange={(e) => handleChange('general', 'practice_address', e.target.value)}
                   margin="normal"
                 />
                 <TextField
                   fullWidth
                   label="Telefon"
-                  value={settings.general.phone}
-                  onChange={(e) => handleChange('general', 'phone', e.target.value)}
+                  value={settings.general.practice_phone}
+                  onChange={(e) => handleChange('general', 'practice_phone', e.target.value)}
                   margin="normal"
                 />
                 <TextField
                   fullWidth
                   label="E-Mail"
-                  value={settings.general.email}
-                  onChange={(e) => handleChange('general', 'email', e.target.value)}
+                  value={settings.general.practice_email}
+                  onChange={(e) => handleChange('general', 'practice_email', e.target.value)}
                   margin="normal"
                 />
               </Grid>
@@ -236,17 +234,25 @@ function Settings() {
                 <TextField
                   fullWidth
                   type="number"
-                  label="Maximale Behandlungen pro Tag"
-                  value={settings.therapy.maxSessionsPerDay}
-                  onChange={(e) => handleChange('therapy', 'maxSessionsPerDay', e.target.value)}
+                  label="Maximale Termine pro Tag"
+                  value={settings.therapy.max_appointments_per_day}
+                  onChange={(e) => handleChange('therapy', 'max_appointments_per_day', e.target.value)}
                   margin="normal"
                 />
                 <TextField
                   fullWidth
                   type="number"
                   label="Standard Behandlungsdauer (Minuten)"
-                  value={settings.therapy.defaultSessionDuration}
-                  onChange={(e) => handleChange('therapy', 'defaultSessionDuration', e.target.value)}
+                  value={settings.therapy.default_session_duration}
+                  onChange={(e) => handleChange('therapy', 'default_session_duration', e.target.value)}
+                  margin="normal"
+                />
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Pause zwischen Terminen (Minuten)"
+                  value={settings.therapy.break_between_sessions}
+                  onChange={(e) => handleChange('therapy', 'break_between_sessions', e.target.value)}
                   margin="normal"
                 />
                 <FormControlLabel
@@ -268,8 +274,8 @@ function Settings() {
                 <FormControlLabel
                   control={
                     <Switch
-                      checked={settings.notifications.enableEmailNotifications}
-                      onChange={(e) => handleChange('notifications', 'enableEmailNotifications', e.target.checked)}
+                      checked={settings.notifications.email_notifications}
+                      onChange={(e) => handleChange('notifications', 'email_notifications', e.target.checked)}
                     />
                   }
                   label="E-Mail-Benachrichtigungen aktivieren"
@@ -277,8 +283,8 @@ function Settings() {
                 <FormControlLabel
                   control={
                     <Switch
-                      checked={settings.notifications.enableSMSNotifications}
-                      onChange={(e) => handleChange('notifications', 'enableSMSNotifications', e.target.checked)}
+                      checked={settings.notifications.sms_notifications}
+                      onChange={(e) => handleChange('notifications', 'sms_notifications', e.target.checked)}
                     />
                   }
                   label="SMS-Benachrichtigungen aktivieren"
@@ -286,9 +292,9 @@ function Settings() {
                 <TextField
                   fullWidth
                   type="number"
-                  label="Erinnerung vor Termin (Stunden)"
-                  value={settings.notifications.reminderTimeBeforeSession}
-                  onChange={(e) => handleChange('notifications', 'reminderTimeBeforeSession', e.target.value)}
+                  label="Erinnerung vor Termin (Tage)"
+                  value={settings.notifications.reminder_days_before}
+                  onChange={(e) => handleChange('notifications', 'reminder_days_before', e.target.value)}
                   margin="normal"
                 />
               </Grid>
@@ -305,37 +311,30 @@ function Settings() {
                   onChange={(e) => handleChange('billing', 'currency', e.target.value)}
                   margin="normal"
                 />
-                <TextField
-                  fullWidth
-                  type="number"
-                  label="Mehrwertsteuersatz (%)"
-                  value={settings.billing.taxRate}
-                  onChange={(e) => handleChange('billing', 'taxRate', e.target.value)}
-                  margin="normal"
-                />
-                <TextField
-                  fullWidth
-                  label="Rechnungspräfix"
-                  value={settings.billing.invoicePrefix}
-                  onChange={(e) => handleChange('billing', 'invoicePrefix', e.target.value)}
-                  margin="normal"
-                />
-                <TextField
-                  fullWidth
-                  type="number"
-                  label="Zahlungsziel (Tage)"
-                  value={settings.billing.paymentTerms}
-                  onChange={(e) => handleChange('billing', 'paymentTerms', e.target.value)}
-                  margin="normal"
-                />
                 <FormControlLabel
                   control={
                     <Switch
-                      checked={settings.billing.enableAutomaticInvoicing}
-                      onChange={(e) => handleChange('billing', 'enableAutomaticInvoicing', e.target.checked)}
+                      checked={settings.billing.auto_billing}
+                      onChange={(e) => handleChange('billing', 'auto_billing', e.target.checked)}
                     />
                   }
                   label="Automatische Rechnungserstellung aktivieren"
+                />
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Abrechnungszyklus (Tage)"
+                  value={settings.billing.billing_cycle_days}
+                  onChange={(e) => handleChange('billing', 'billing_cycle_days', e.target.value)}
+                  margin="normal"
+                />
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Standard-Zahlungsziel (Tage)"
+                  value={settings.billing.default_payment_terms}
+                  onChange={(e) => handleChange('billing', 'default_payment_terms', e.target.value)}
+                  margin="normal"
                 />
               </Grid>
             </Grid>

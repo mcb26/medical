@@ -31,6 +31,7 @@ import {
   Assessment as AssessmentIcon,
   TableChart as TableChartIcon,
   Settings as SettingsIcon,
+  Receipt as ReceiptIcon,
   ExpandLess,
   ExpandMore,
   KeyboardArrowRight as ArrowRightIcon
@@ -134,6 +135,20 @@ function SidebarMenu({ drawerOpen, toggleDrawer }) {
           icon: <AssessmentIcon />,
           path: '/billing-cycles',
           description: 'Abrechnungszyklen',
+          badge: null
+        },
+        {
+          text: 'Rechnungsübersicht',
+          icon: <ReceiptIcon />,
+          path: '/invoices',
+          description: 'Alle Rechnungen und Zahlungsbuchung',
+          badge: null
+        },
+        {
+          text: 'Zuzahlungsrechnungen',
+          icon: <ReceiptIcon />,
+          path: '/copay-invoices',
+          description: 'Zuzahlungsrechnungen aus Terminen erstellen',
           badge: null
         }
       ]

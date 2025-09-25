@@ -9,28 +9,43 @@ export const PermissionProvider = ({ children }) => {
   const [permissions, setPermissions] = useState({});
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const [lastUpdate, setLastUpdate] = useState(null);
 
   // Lade Benutzerberechtigungen
-  const loadPermissions = async () => {
+  const loadPermissions = async (force = false) => {
     try {
-      setLoading(true);
-      
-      // Nur laden wenn User eingeloggt ist
+      // Prüfe ob ein Token vorhanden ist
       const token = localStorage.getItem('token');
       if (!token) {
         console.log('No token found, skipping permissions load');
         setPermissions({});
+        setUser(null);
         setLoading(false);
         return;
       }
+
+      // Prüfe ob ein Update nötig ist (alle 5 Minuten oder bei force)
+      const now = Date.now();
+      const fiveMinutes = 5 * 60 * 1000;
+      
+      if (!force && lastUpdate && (now - lastUpdate) < fiveMinutes) {
+        console.log('Permissions recently updated, skipping refresh');
+        return;
+      }
+
+      setLoading(true);
       
       const response = await api.get('/users/me/');
       const userData = response.data;
       setUser(userData);
       setPermissions(userData.effective_permissions || {});
+      setLastUpdate(now);
+      
+      console.log('Permissions updated:', userData.effective_permissions);
     } catch (error) {
       console.error('Fehler beim Laden der Berechtigungen:', error);
       setPermissions({});
+      setUser(null);
     } finally {
       setLoading(false);
     }
@@ -102,8 +117,59 @@ export const PermissionProvider = ({ children }) => {
     );
   };
 
+  // Event-Handler für Storage-Änderungen
   useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'token') {
+        // Token geändert - Berechtigungen neu laden
+        loadPermissions(true);
+      } else if (e.key === 'userProfile') {
+        // Benutzerprofil geändert - Berechtigungen neu laden
+        loadPermissions(true);
+      }
+    };
+
+    // Event-Listener für Storage-Änderungen
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Event-Listener für Custom Events
+    const handlePermissionUpdate = () => {
+      loadPermissions(true);
+    };
+    
+    window.addEventListener('permissions-updated', handlePermissionUpdate);
+    
+    // Event-Listener für Focus (wenn Tab wieder aktiv wird)
+    const handleFocus = () => {
+      // Prüfe ob Berechtigungen aktualisiert werden müssen
+      const now = Date.now();
+      const tenMinutes = 10 * 60 * 1000;
+      
+      if (!lastUpdate || (now - lastUpdate) > tenMinutes) {
+        loadPermissions();
+      }
+    };
+    
+    window.addEventListener('focus', handleFocus);
+
+    // Initial laden
     loadPermissions();
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('permissions-updated', handlePermissionUpdate);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
+
+  // Regelmäßige Updates (alle 10 Minuten)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadPermissions();
+    }, 10 * 60 * 1000); // 10 Minuten
+
+    return () => clearInterval(interval);
   }, []);
 
   const value = {
@@ -116,7 +182,7 @@ export const PermissionProvider = ({ children }) => {
     getPermissionLevel,
     getAvailableModules,
     getFullAccessModules,
-    reloadPermissions: loadPermissions
+    reloadPermissions: () => loadPermissions(true)
   };
 
   return (
@@ -126,11 +192,11 @@ export const PermissionProvider = ({ children }) => {
   );
 };
 
-// Hook für die Verwendung der Berechtigungen
+// Hook für Berechtigungen
 export const usePermissions = () => {
   const context = useContext(PermissionContext);
   if (!context) {
-    throw new Error('usePermissions muss innerhalb eines PermissionProviders verwendet werden');
+    throw new Error('usePermissions must be used within a PermissionProvider');
   }
   return context;
 };

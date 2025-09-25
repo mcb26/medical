@@ -8,9 +8,7 @@ import { fetchUserProfile, isAuthenticated } from './services/auth';
 import { ToastProvider } from './components/common/ToastNotifications';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import { SkipLink } from './components/common/Accessibility';
-import { ResponsiveOptimizer } from './components/common/ResponsiveOptimizer';
-import { UXEnhancer } from './components/common/UXEnhancer';
-import { LinkValidator } from './components/common/LinkValidator';
+import { ResponsiveOptimizer } from './components/common/UXEnhancer';
 import DashboardLayout from './components/DashboardLayout';
 import Home from './components/Home';
 import Calendar from './components/Calendar';
@@ -20,7 +18,8 @@ import PrescriptionList from './components/PrescriptionList';
 import InsuranceManagement from './components/InsuranceManagement';
 import Settings from './components/Settings';
 import TreatmentList from './components/TreatmentList';
-import PrescriptionDetail from './components/PrescriptionDetail'; 
+import PrescriptionDetailPage from './components/PrescriptionDetailPage';
+import FollowUpPrescriptionPage from './components/FollowUpPrescriptionPage'; 
 import TreatmentDetail from './components/TreatmentDetail';
 import PrivateRoute from './components/PrivateRoute'; // Import PrivateRoute
 import Login from './components/Login';
@@ -92,6 +91,8 @@ import AbsenceNew from './components/AbsenceNew';
 import AbsenceEdit from './components/AbsenceEdit';
 import { PermissionProvider } from './hooks/usePermissions';
 import DebugPermissions from './components/DebugPermissions';
+import InvoiceOverview from './components/InvoiceOverview';
+import CopayInvoiceManager from './components/CopayInvoiceManager';
 
 
 function App() {
@@ -131,7 +132,6 @@ function App() {
       <ThemeProvider theme={currentTheme}>
         <CssBaseline />
         <ResponsiveOptimizer>
-          <UXEnhancer>
             <ToastProvider>
               <PermissionProvider>
                 <Router>
@@ -160,7 +160,8 @@ function App() {
           <Route path="/appointments/:id" element={<AppointmentDetail />} />
           <Route path="/appointments/series/:seriesIdentifier" element={<AppointmentSeriesDetail />} />
           <Route path="/appointments" element={<AppointmentList />} />
-          <Route path="/prescriptions/:id" element={<PrescriptionDetail />} />
+          <Route path="/prescriptions/:id" element={<PrescriptionDetailPage />} />
+          <Route path="/prescriptions/:id/follow-up" element={<FollowUpPrescriptionPage />} />
           <Route path="/patients/new" element={<PatientNew />} />
           <Route path="/prescriptions/new" element={<PrivateRoute><PrescriptionNew /></PrivateRoute>} />
           <Route path="/analysis" element={<AnalysisTabs />} />
@@ -211,6 +212,9 @@ function App() {
           <Route path="/waitlist" element={<WaitlistManagement />} />
           <Route path="/absences/new" element={<AbsenceNew />} />
           <Route path="/absences/:id/edit" element={<AbsenceEdit />} />
+          <Route path="/billing-cycles/bulk" element={<BulkBillingForm />} />
+          <Route path="/invoices" element={<InvoiceOverview />} />
+          <Route path="/copay-invoices" element={<CopayInvoiceManager />} />
         </Route>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
@@ -222,14 +226,12 @@ function App() {
         <Route path="/appointments/create_series" element={<AppointmentSeriesForm />} />
         <Route path="/doctors/new" element={<DoctorNew />} />
         <Route path="/doctors/:id" element={<DoctorDetail />} />
-        <Route path="/billing-cycles/bulk" element={<BulkBillingForm />} />
         <Route path="/debug-permissions" element={<DebugPermissions />} />
                                 </Routes>
                   </div>
                 </Router>
               </PermissionProvider>
             </ToastProvider>
-          </UXEnhancer>
         </ResponsiveOptimizer>
       </ThemeProvider>
     </ErrorBoundary>

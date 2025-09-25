@@ -4,8 +4,13 @@ Django==5.1.5
 django-cors-headers==4.6.0
 djangorestframework==3.15.2
 djangorestframework_simplejwt==5.4.0
+django-extensions==3.2.3
 pdfkit==1.0.0
 pillow==11.1.0
 PyJWT==2.10.1
 reportlab==4.3.1
 sqlparse==0.5.3
+psutil==7.0.0
+django-redis==5.4.0
+redis==5.0.1
+pytesseract==0.3.10

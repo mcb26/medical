@@ -35,6 +35,9 @@ from .models import (
     Absence,
     ModulePermission,
     UserRole,
+    Waitlist,
+    LocalHoliday,
+    Payment,
 )
 
 User = get_user_model()
@@ -170,15 +173,45 @@ class InsuranceProviderSerializer(serializers.ModelSerializer):
             'updated_at'
         ]
 
-class PatientSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Patient
-        fields = '__all__'
-
 class PatientInsuranceSerializer(serializers.ModelSerializer):
+    insurance_provider_name = serializers.CharField(source='insurance_provider.name', read_only=True)
+    
     class Meta:
         model = PatientInsurance
-        fields = '__all__'
+        fields = [
+            'id', 'patient', 'insurance_provider', 'insurance_provider_name',
+            'insurance_number', 'valid_from', 'valid_to', 'is_private'
+        ]
+
+class PatientSerializer(serializers.ModelSerializer):
+    insurances = PatientInsuranceSerializer(many=True, read_only=True)
+    insurance_provider_name = serializers.SerializerMethodField()
+    
+    def get_insurance_provider_name(self, obj):
+        """Gibt den Namen der aktuellen Versicherung zurück"""
+        current_insurance = obj.insurances.filter(
+            valid_from__lte=timezone.now().date(),
+            valid_to__gte=timezone.now().date()
+        ).first()
+        
+        if not current_insurance:
+            # Fallback: neueste gültige Versicherung
+            current_insurance = obj.insurances.filter(
+                valid_from__lte=timezone.now().date()
+            ).order_by('-valid_from').first()
+        
+        if current_insurance and current_insurance.insurance_provider:
+            return current_insurance.insurance_provider.name
+        return None
+    
+    class Meta:
+        model = Patient
+        fields = [
+            'id', 'first_name', 'last_name', 'dob', 'gender', 
+            'email', 'phone_number', 'street_address', 'city', 'postal_code', 
+            'country', 'medical_history', 'allergies', 'receive_notifications',
+            'created_at', 'updated_at', 'insurances', 'insurance_provider_name'
+        ]
 
 class EmergencyContactSerializer(serializers.ModelSerializer):
     class Meta:
@@ -247,17 +280,87 @@ class CategorySerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class AppointmentSerializer(serializers.ModelSerializer):
-    patient_name = serializers.CharField(source='patient.__str__', read_only=True)
+    patient_name = serializers.SerializerMethodField()
     treatment_name = serializers.CharField(source='treatment.treatment_name', read_only=True)
-    practitioner_name = serializers.CharField(source='practitioner.__str__', read_only=True)
+    practitioner_name = serializers.SerializerMethodField()
     room_name = serializers.CharField(source='room.name', read_only=True)
     room = serializers.PrimaryKeyRelatedField(queryset=Room.objects.all(), required=False, allow_null=True)
     created_at = serializers.DateTimeField(format="%Y-%m-%dT%H:%M:%S", required=False)
     updated_at = serializers.DateTimeField(format="%Y-%m-%dT%H:%M:%S", required=False)
+    status_display = serializers.SerializerMethodField()
+    
+    # Verknüpfte Objekte als vollständige Objekte
+    patient = serializers.SerializerMethodField()
+    treatment = serializers.SerializerMethodField()
+    practitioner = serializers.SerializerMethodField()
+    
+    def get_patient_name(self, obj):
+        if obj.patient:
+            return f"{obj.patient.first_name} {obj.patient.last_name}"
+        return "Unbekannt"
+    
+    def get_practitioner_name(self, obj):
+        if obj.practitioner:
+            return f"{obj.practitioner.first_name} {obj.practitioner.last_name}"
+        return "Unbekannt"
+    
+    def get_patient(self, obj):
+        if obj.patient:
+            return {
+                'id': obj.patient.id,
+                'first_name': obj.patient.first_name,
+                'last_name': obj.patient.last_name,
+                'email': obj.patient.email,
+                'phone_number': obj.patient.phone_number
+            }
+        return None
+    
+    def get_treatment(self, obj):
+        if obj.treatment:
+            return {
+                'id': obj.treatment.id,
+                'treatment_name': obj.treatment.treatment_name,
+                'description': obj.treatment.description,
+                'duration_minutes': obj.treatment.duration_minutes,
+                'is_self_pay': obj.treatment.is_self_pay,
+                'self_pay_price': obj.treatment.self_pay_price,
+                'legs_code': obj.treatment.legs_code,
+                'accounting_code': obj.treatment.accounting_code,
+                'tariff_indicator': obj.treatment.tariff_indicator,
+                'is_gkv_billable': obj.treatment.is_gkv_billable()
+            }
+        return None
+    
+    def get_practitioner(self, obj):
+        if obj.practitioner:
+            return {
+                'id': obj.practitioner.id,
+                'first_name': obj.practitioner.first_name,
+                'last_name': obj.practitioner.last_name,
+                'email': obj.practitioner.email,
+                'is_active': obj.practitioner.is_active
+            }
+        return None
+    
+    def get_status_display(self, obj):
+        status_map = {
+            'planned': 'Geplant',
+            'confirmed': 'Bestätigt',
+            'completed': 'Abgeschlossen',
+            'cancelled': 'Storniert',
+            'ready_to_bill': 'Abrechnungsbereit',
+            'billed': 'Abgerechnet'
+        }
+        return status_map.get(obj.status, obj.status)
 
     class Meta:
         model = Appointment
-        fields = '__all__'
+        fields = [
+            'id', 'patient', 'patient_name', 'practitioner', 'practitioner_name',
+            'appointment_date', 'status', 'status_display', 'treatment', 'treatment_name',
+            'prescription', 'duration_minutes', 'notes', 'room', 'room_name',
+            'series_identifier', 'is_recurring', 'created_at', 'updated_at'
+        ]
 
 class AppointmentSeriesSerializer(serializers.Serializer):
     prescription_id = serializers.IntegerField()
@@ -350,6 +453,8 @@ class BillingCycleSerializer(serializers.ModelSerializer):
 
 class PrescriptionSerializer(serializers.ModelSerializer):
     treatment_1 = serializers.PrimaryKeyRelatedField(queryset=Treatment.objects.all())
+    treatment_name = serializers.CharField(source='treatment_1.treatment_name', read_only=True)
+    treatment = serializers.PrimaryKeyRelatedField(source='treatment_1', read_only=True)
     patient_name = serializers.SerializerMethodField()
     patient_birth_date = serializers.SerializerMethodField()
     insurance_number = serializers.SerializerMethodField()
@@ -371,6 +476,8 @@ class PrescriptionSerializer(serializers.ModelSerializer):
             'doctor',
             'doctor_name',
             'treatment_1',
+            'treatment_name',
+            'treatment',
             'treatment_2',
             'treatment_2_name',
             'treatment_3',
@@ -469,9 +576,24 @@ class PrescriptionSerializer(serializers.ModelSerializer):
             return ""
 
 class TreatmentSerializer(serializers.ModelSerializer):
+    legs_code_display = serializers.CharField(source='get_legs_code_display', read_only=True)
+    is_gkv_billable = serializers.BooleanField(read_only=True)
+    billing_info = serializers.SerializerMethodField()
+    
     class Meta:
         model = Treatment
-        fields = '__all__'
+        fields = [
+            'id', 'treatment_name', 'description', 'duration_minutes', 'category',
+            'position_number', 'is_self_pay', 'self_pay_price',
+            # LEGS-Code Felder
+            'legs_code', 'accounting_code', 'tariff_indicator', 'legs_code_display',
+            'prescription_type_indicator', 'is_telemedicine', 'is_gkv_billable',
+            'billing_info',
+            'created_at', 'updated_at'
+        ]
+    
+    def get_billing_info(self, obj):
+        return obj.get_billing_info()
 
 class SurchargeSerializer(serializers.ModelSerializer):
     class Meta:
@@ -533,11 +655,18 @@ class PracticeSerializer(serializers.ModelSerializer):
         return value
 
 class BillingItemSerializer(serializers.ModelSerializer):
-    patient_name = serializers.CharField(source='prescription.patient.last_name')
+    patient_name = serializers.SerializerMethodField()
     treatment_name = serializers.CharField(source='treatment.treatment_name')
     appointment_date = serializers.DateTimeField(source='appointment.appointment_date')
     insurance_amount = serializers.DecimalField(max_digits=10, decimal_places=2)
     patient_copay = serializers.DecimalField(max_digits=10, decimal_places=2)
+
+    def get_patient_name(self, obj):
+        if obj.prescription and obj.prescription.patient:
+            return f"{obj.prescription.patient.first_name} {obj.prescription.patient.last_name}"
+        elif obj.appointment and obj.appointment.patient:
+            return f"{obj.appointment.patient.first_name} {obj.appointment.patient.last_name}"
+        return "Unbekannt"
 
     class Meta:
         model = BillingItem
@@ -560,4 +689,67 @@ class AbsenceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Absence
         fields = '__all__'
+
+class LocalHolidaySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LocalHoliday
+        fields = '__all__'
+
+class WaitlistSerializer(serializers.ModelSerializer):
+    patient_name = serializers.CharField(source='patient.get_full_name', read_only=True)
+    treatment_name = serializers.CharField(source='treatment.treatment_name', read_only=True)
+    practitioner_name = serializers.CharField(source='practitioner.get_full_name', read_only=True)
+    priority_display = serializers.CharField(source='get_priority_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    
+    class Meta:
+        model = Waitlist
+        fields = [
+            'id', 'patient', 'patient_name', 'treatment', 'treatment_name',
+            'practitioner', 'practitioner_name', 'prescription', 'available_from',
+            'available_until', 'priority', 'priority_display', 'status', 'status_display',
+            'original_appointment', 'notes', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def validate(self, data):
+        """Validierung der Wartelisten-Daten"""
+        available_from = data.get('available_from')
+        available_until = data.get('available_until')
+        
+        if available_from and available_until and available_from >= available_until:
+            raise serializers.ValidationError(
+                "Verfügbar bis muss nach Verfügbar ab liegen."
+            )
+        
+        return data
+
+class PaymentSerializer(serializers.ModelSerializer):
+    patient_name = serializers.SerializerMethodField()
+    invoice_reference = serializers.SerializerMethodField()
+    payment_method_display = serializers.CharField(source='get_payment_method_display', read_only=True)
+    payment_type_display = serializers.CharField(source='get_payment_type_display', read_only=True)
+    
+    class Meta:
+        model = Payment
+        fields = [
+            'id', 'payment_date', 'amount', 'payment_method', 'payment_method_display',
+            'payment_type', 'payment_type_display', 'reference_number', 'transaction_id',
+            'is_confirmed', 'notes', 'patient_name', 'invoice_reference',
+            'patient_invoice', 'copay_invoice', 'private_invoice',
+            'created_by', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_by', 'created_at', 'updated_at']
+    
+    def get_patient_name(self, obj):
+        patient = obj.get_patient()
+        return str(patient) if patient else None
+    
+    def get_invoice_reference(self, obj):
+        return obj.get_invoice_reference()
+    
+    def create(self, validated_data):
+        # Setze den aktuellen Benutzer als created_by
+        validated_data['created_by'] = self.context['request'].user
+        return super().create(validated_data)
 

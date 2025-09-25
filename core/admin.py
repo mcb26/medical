@@ -32,6 +32,8 @@ from .models import (
     UserRole,
     ModulePermission,
     UserActivityLog,
+    LocalHoliday,
+    Payment,
 )
 from .services.appointment_series import AppointmentSeriesService
 from .services.bulk_billing_service import BulkBillingService
@@ -356,9 +358,54 @@ class InsuranceProviderGroupAdmin(admin.ModelAdmin):
 
 @admin.register(Treatment)
 class TreatmentAdmin(admin.ModelAdmin):
-    list_display = ['treatment_name', 'category', 'duration_minutes', 'is_self_pay']
-    list_filter = ['category', 'is_self_pay']
-    search_fields = ['treatment_name']
+    list_display = [
+        'treatment_name', 
+        'category', 
+        'duration_minutes', 
+        'get_legs_code_display',
+        'is_telemedicine',
+        'is_self_pay'
+    ]
+    list_filter = [
+        'category', 
+        'is_self_pay', 
+        'is_telemedicine',
+        'prescription_type_indicator'
+    ]
+    search_fields = [
+        'treatment_name', 
+        'legs_code', 
+        'accounting_code', 
+        'tariff_indicator'
+    ]
+    
+    fieldsets = (
+        ('Grunddaten', {
+            'fields': ('treatment_name', 'description', 'duration_minutes', 'category')
+        }),
+        ('GKV-Abrechnung', {
+            'fields': (
+                'legs_code', 
+                'accounting_code', 
+                'tariff_indicator',
+                'prescription_type_indicator',
+                'is_telemedicine'
+            ),
+            'description': 'Leistungserbringergruppenschlüssel (LEGS) für GKV-Abrechnung'
+        }),
+        ('Selbstzahler', {
+            'fields': ('is_self_pay', 'self_pay_price'),
+            'description': 'Einstellungen für Selbstzahler-Behandlungen'
+        }),
+        ('Zusätzliche Informationen', {
+            'fields': ('position_number',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_legs_code_display(self, obj):
+        return obj.get_legs_code_display()
+    get_legs_code_display.short_description = 'LEGS-Code'
 
 @admin.register(Absence)
 class AbsenceAdmin(admin.ModelAdmin):
@@ -621,3 +668,5 @@ admin.site.register(CalendarSettings)
 admin.site.register(Bundesland)
 admin.site.register(WorkingHour)
 admin.site.register(Practice)
+admin.site.register(LocalHoliday)
+admin.site.register(Payment)

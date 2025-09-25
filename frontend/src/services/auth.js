@@ -211,6 +211,9 @@ const updateUserProfile = async (profileData) => {
 
         if (response.data) {
             localStorage.setItem('userProfile', JSON.stringify(response.data));
+            // Custom Events auslösen
+            window.dispatchEvent(new CustomEvent('userProfile-updated'));
+            window.dispatchEvent(new CustomEvent('permissions-updated'));
             return response.data;
         }
         return false;
@@ -218,6 +221,12 @@ const updateUserProfile = async (profileData) => {
         console.error('Error updating user profile:', error);
         throw error;
     }
+};
+
+// Funktion um Berechtigungen zu aktualisieren
+const updatePermissions = () => {
+  // Custom Event auslösen um Berechtigungen zu aktualisieren
+  window.dispatchEvent(new CustomEvent('permissions-updated'));
 };
 
 // Export einzelner Funktionen für direkten Import
@@ -232,6 +241,7 @@ export {
     getUserInitials,
     getUserFullName,
     updateUserProfile,
+    updatePermissions,
     generateInitials,
     parseName
 };
@@ -248,6 +258,7 @@ const auth = {
     getUserInitials,
     getUserFullName,
     updateUserProfile,
+    updatePermissions,
     generateInitials,
     parseName
 };

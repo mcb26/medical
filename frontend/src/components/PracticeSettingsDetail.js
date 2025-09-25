@@ -17,7 +17,7 @@ function PracticeSettingsDetail() {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const response = await api.get('/practice/instance/');
+        const response = await api.get('/practice/get_instance/');
         setSettings(response.data);
         setLoading(false);
       } catch (error) {
@@ -32,7 +32,7 @@ function PracticeSettingsDetail() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await api.put('/practice/instance/', settings);
+      await api.put('/practice/update_instance/', settings);
       setSuccess('Einstellungen erfolgreich gespeichert');
       setError('');
     } catch (error) {

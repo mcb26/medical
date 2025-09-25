@@ -1,359 +1,216 @@
-import React, { useEffect, useState } from 'react';
-import { 
-  Box, 
-  useTheme, 
-  useMediaQuery,
-  Snackbar,
-  Alert,
-  Fade,
-  Zoom,
-  Slide
-} from '@mui/material';
-import { 
-  CheckCircle as CheckIcon,
-  Info as InfoIcon,
-  Warning as WarningIcon,
-  Error as ErrorIcon
-} from '@mui/icons-material';
+import React from 'react';
+import { Box, CircularProgress, Typography, Fade } from '@mui/material';
 
-// UX Enhancer für bessere Benutzererfahrung
-export const UXEnhancer = ({ children }) => {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const [notifications, setNotifications] = useState([]);
+// Loading Overlay Component
+export const LoadingOverlay = ({ 
+  isLoading, 
+  message = 'Lade...', 
+  children,
+  overlay = true 
+}) => {
+  if (!isLoading) return children;
 
-  // Performance-Optimierungen
-  useEffect(() => {
-    // Smooth Scrolling aktivieren
-    document.documentElement.style.scrollBehavior = 'smooth';
-    
-    // Touch-Optimierungen für mobile Geräte
-    if (isMobile) {
-      document.body.style.touchAction = 'manipulation';
-      document.body.style.WebkitOverflowScrolling = 'touch';
-    }
-
-    // Cleanup
-    return () => {
-      document.documentElement.style.scrollBehavior = '';
-      document.body.style.touchAction = '';
-      document.body.style.WebkitOverflowScrolling = '';
-    };
-  }, [isMobile]);
-
-  // Benachrichtigung hinzufügen
-  const addNotification = (message, type = 'info', duration = 4000) => {
-    const id = Date.now();
-    const notification = { id, message, type, duration };
-    setNotifications(prev => [...prev, notification]);
-
-    // Automatisch entfernen
-    setTimeout(() => {
-      removeNotification(id);
-    }, duration);
-  };
-
-  // Benachrichtigung entfernen
-  const removeNotification = (id) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  };
-
-  return (
-    <Box
-      sx={{
-        // Basis UX-Optimierungen
-        minHeight: '100vh',
-        position: 'relative',
-        
-        // Smooth Transitions
-        '& *': {
-          transition: 'all 0.2s ease-in-out',
-        },
-        
-        // Focus-Optimierungen
-        '& *:focus': {
-          outline: `2px solid ${theme.palette.primary.main}`,
-          outlineOffset: '2px',
-        },
-        
-        // Hover-Effekte
-        '& button:hover, & .MuiButton-root:hover': {
-          transform: 'translateY(-1px)',
-          boxShadow: theme.shadows[4],
-        },
-        
-        // Loading-States
-        '& .loading': {
-          opacity: 0.7,
-          pointerEvents: 'none',
-        },
-        
-        // Mobile Optimierungen
-        ...(isMobile && {
-          '& .MuiButton-root': {
-            minHeight: '44px',
-            minWidth: '44px',
-          },
-          '& .MuiIconButton-root': {
-            minHeight: '44px',
-            minWidth: '44px',
-          },
-        }),
-      }}
-    >
-      {children}
-      
-      {/* Benachrichtigungen */}
-      {notifications.map((notification) => (
-        <Snackbar
-          key={notification.id}
-          open={true}
-          autoHideDuration={notification.duration}
-          onClose={() => removeNotification(notification.id)}
-          anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-          TransitionComponent={Slide}
-        >
-          <Alert
-            severity={notification.type}
-            icon={
-              notification.type === 'success' ? <CheckIcon /> :
-              notification.type === 'info' ? <InfoIcon /> :
-              notification.type === 'warning' ? <WarningIcon /> :
-              <ErrorIcon />
-            }
-            onClose={() => removeNotification(notification.id)}
+  if (overlay) {
+    return (
+      <Box sx={{ position: 'relative' }}>
+        {children}
+        <Fade in={isLoading}>
+          <Box
             sx={{
-              minWidth: isMobile ? '280px' : '320px',
-              boxShadow: theme.shadows[8],
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              bgcolor: 'rgba(255, 255, 255, 0.8)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
             }}
           >
-            {notification.message}
-          </Alert>
-        </Snackbar>
-      ))}
-    </Box>
-  );
-};
-
-// Verbesserte Loading-Komponente
-export const EnhancedLoading = ({ 
-  size = 'medium',
-  variant = 'circular',
-  sx = {},
-  ...props 
-}) => {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-
-  const sizeMap = {
-    small: isMobile ? 20 : 24,
-    medium: isMobile ? 32 : 40,
-    large: isMobile ? 48 : 60,
-  };
+            <CircularProgress size={40} />
+            <Typography variant="body2" sx={{ mt: 1 }}>
+              {message}
+            </Typography>
+          </Box>
+        </Fade>
+      </Box>
+    );
+  }
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: theme.spacing(3),
-        minHeight: '200px',
-        ...sx,
-      }}
-      {...props}
-    >
-      <Box
-        sx={{
-          width: sizeMap[size],
-          height: sizeMap[size],
-          border: `3px solid ${theme.palette.grey[200]}`,
-          borderTop: `3px solid ${theme.palette.primary.main}`,
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite',
-          '@keyframes spin': {
-            '0%': { transform: 'rotate(0deg)' },
-            '100%': { transform: 'rotate(360deg)' },
-          },
-        }}
-      />
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 3 }}>
+      <CircularProgress size={40} />
+      <Typography variant="body2" sx={{ mt: 1 }}>
+        {message}
+      </Typography>
     </Box>
   );
 };
 
-// Verbesserte Empty State Komponente
-export const EnhancedEmptyState = ({ 
-  title = 'Keine Daten',
-  description = 'Es sind noch keine Daten vorhanden.',
-  icon,
-  action,
-  sx = {},
-  ...props 
-}) => {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+// Responsive Optimizer Component
+export const ResponsiveOptimizer = ({ children, breakpoint = 'md' }) => {
+  const [isOptimized, setIsOptimized] = React.useState(false);
 
-  return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: theme.spacing(4),
-        minHeight: '300px',
-        textAlign: 'center',
-        color: theme.palette.text.secondary,
-        ...sx,
-      }}
-      {...props}
-    >
-      {icon && (
-        <Box
-          sx={{
-            fontSize: isMobile ? '3rem' : '4rem',
-            color: theme.palette.grey[400],
-            marginBottom: theme.spacing(2),
-          }}
-        >
-          {icon}
-        </Box>
-      )}
-      
-      <Box
-        component="h3"
-        sx={{
-          fontSize: isMobile ? '1.25rem' : '1.5rem',
-          fontWeight: 600,
-          marginBottom: theme.spacing(1),
-          color: theme.palette.text.primary,
-        }}
-      >
-        {title}
-      </Box>
-      
-      <Box
-        component="p"
-        sx={{
-          fontSize: isMobile ? '0.875rem' : '1rem',
-          marginBottom: action ? theme.spacing(3) : 0,
-          maxWidth: '400px',
-          lineHeight: 1.5,
-        }}
-      >
-        {description}
-      </Box>
-      
-      {action && (
-        <Box>
-          {action}
-        </Box>
-      )}
-    </Box>
-  );
-};
+  React.useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+      let shouldOptimize = false;
 
-// Verbesserte Error Boundary
-export const EnhancedErrorBoundary = ({ 
-  children,
-  fallback,
-  onError,
-  ...props 
-}) => {
-  const [hasError, setHasError] = useState(false);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    const handleError = (error) => {
-      setHasError(true);
-      setError(error);
-      
-      if (onError) {
-        onError(error);
+      switch (breakpoint) {
+        case 'xs':
+          shouldOptimize = width < 600;
+          break;
+        case 'sm':
+          shouldOptimize = width < 960;
+          break;
+        case 'md':
+          shouldOptimize = width < 1280;
+          break;
+        case 'lg':
+          shouldOptimize = width < 1920;
+          break;
+        default:
+          shouldOptimize = width < 1280;
       }
-      
-      // Log error für Debugging
-      console.error('EnhancedErrorBoundary caught an error:', error);
+
+      setIsOptimized(shouldOptimize);
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [breakpoint]);
+
+  return (
+    <Box sx={{ 
+      transform: isOptimized ? 'scale(0.95)' : 'scale(1)',
+      transition: 'transform 0.3s ease-in-out'
+    }}>
+      {children}
+    </Box>
+  );
+};
+
+// Performance Monitor Component
+export const PerformanceMonitor = ({ children, onPerformanceIssue }) => {
+  const startTime = React.useRef(Date.now());
+
+  React.useEffect(() => {
+    const endTime = Date.now();
+    const duration = endTime - startTime.current;
+
+    if (duration > 1000 && onPerformanceIssue) {
+      onPerformanceIssue({
+        duration,
+        component: 'PerformanceMonitor',
+        timestamp: new Date().toISOString()
+      });
+    }
+  }, [onPerformanceIssue]);
+
+  return children;
+};
+
+// Lazy Loader Component
+export const LazyLoader = ({ 
+  children, 
+  threshold = 0.1,
+  placeholder = null 
+}) => {
+  const [isVisible, setIsVisible] = React.useState(false);
+  const [isLoaded, setIsLoaded] = React.useState(false);
+  const ref = React.useRef();
+
+  React.useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { threshold }
+    );
+
+    if (ref.current) {
+      observer.observe(ref.current);
+    }
+
+    return () => observer.disconnect();
+  }, [threshold]);
+
+  React.useEffect(() => {
+    if (isVisible) {
+      const timer = setTimeout(() => setIsLoaded(true), 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isVisible]);
+
+  return (
+    <Box ref={ref}>
+      {isLoaded ? children : placeholder}
+    </Box>
+  );
+};
+
+// Error Boundary Wrapper
+export const ErrorBoundaryWrapper = ({ children, fallback }) => {
+  const [hasError, setHasError] = React.useState(false);
+
+  React.useEffect(() => {
+    const handleError = (error) => {
+      console.error('Error caught by UXEnhancer:', error);
+      setHasError(true);
     };
 
     window.addEventListener('error', handleError);
-    window.addEventListener('unhandledrejection', (event) => {
-      handleError(event.reason);
-    });
-
-    return () => {
-      window.removeEventListener('error', handleError);
-      window.removeEventListener('unhandledrejection', handleError);
-    };
-  }, [onError]);
+    return () => window.removeEventListener('error', handleError);
+  }, []);
 
   if (hasError) {
     return fallback || (
-      <EnhancedEmptyState
-        title="Ein Fehler ist aufgetreten"
-        description="Die Anwendung konnte nicht ordnungsgemäß geladen werden. Bitte laden Sie die Seite neu."
-        icon={<ErrorIcon />}
-        action={
-          <Box
-            component="button"
-            onClick={() => window.location.reload()}
-            sx={{
-              padding: '8px 16px',
-              backgroundColor: 'primary.main',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '0.875rem',
-              '&:hover': {
-                backgroundColor: 'primary.dark',
-              },
-            }}
-          >
-            Seite neu laden
-          </Box>
-        }
-      />
+      <Box sx={{ p: 2, textAlign: 'center' }}>
+        <Typography color="error">
+          Ein Fehler ist aufgetreten. Bitte laden Sie die Seite neu.
+        </Typography>
+      </Box>
     );
   }
 
   return children;
 };
 
-// Hook für UX-Optimierungen
-export const useUXOptimizations = () => {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-
-  return {
-    // Touch-Optimierungen
-    touchOptimizations: {
-      touchAction: isMobile ? 'manipulation' : 'auto',
-      WebkitOverflowScrolling: isMobile ? 'touch' : 'auto',
-      minHeight: isMobile ? '44px' : 'auto',
-      minWidth: isMobile ? '44px' : 'auto',
-    },
-    
-    // Animation-Optimierungen
-    animationOptimizations: {
-      transition: 'all 0.2s ease-in-out',
-      willChange: 'auto',
-      transform: 'translateZ(0)',
-    },
-    
-    // Focus-Optimierungen
-    focusOptimizations: {
-      outline: `2px solid ${theme.palette.primary.main}`,
-      outlineOffset: '2px',
-    },
-    
-    // Mobile-spezifische Optimierungen
-    mobileOptimizations: isMobile ? {
-      fontSize: '14px',
-      lineHeight: 1.4,
-      touchAction: 'manipulation',
-    } : {},
-  };
+// Auto Save Indicator
+export const AutoSaveIndicator = ({ isSaving, lastSaved }) => {
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      {isSaving && (
+        <>
+          <CircularProgress size={16} />
+          <Typography variant="caption" color="text.secondary">
+            Speichere...
+          </Typography>
+        </>
+      )}
+      {!isSaving && lastSaved && (
+        <Typography variant="caption" color="success.main">
+          Gespeichert um {new Date(lastSaved).toLocaleTimeString()}
+        </Typography>
+      )}
+    </Box>
+  );
 };
 
-export default UXEnhancer;
+const UXEnhancerComponents = {
+  LoadingOverlay,
+  ResponsiveOptimizer,
+  PerformanceMonitor,
+  LazyLoader,
+  ErrorBoundaryWrapper,
+  AutoSaveIndicator,
+};
+
+export default UXEnhancerComponents;

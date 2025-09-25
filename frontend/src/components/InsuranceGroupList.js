@@ -68,6 +68,7 @@ function InsuranceGroupList() {
           rows={insuranceGroups}
           columns={columns}
           loading={loading}
+          rowCount={insuranceGroups.length}
           slots={{
             toolbar: GridToolbar,
           }}

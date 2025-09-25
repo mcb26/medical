@@ -30,74 +30,91 @@ class BulkBillingService:
         """
         results = []
         
-        # Finde alle Krankenkassen mit abrechnungsbereiten Terminen
-        insurance_providers = InsuranceProvider.objects.filter(
-            patientinsurance__patient__appointment__appointment_date__date__range=[start_date, end_date],
-            patientinsurance__patient__appointment__status='ready_to_bill',
-            patientinsurance__patient__appointment__prescription__isnull=False  # Nur Termine mit Verordnung
-        ).distinct()
+        try:
+            # Finde alle Krankenkassen mit abrechnungsbereiten Terminen
+            insurance_providers = InsuranceProvider.objects.filter(
+                patientinsurance__patient__appointment__appointment_date__date__range=[start_date, end_date],
+                patientinsurance__patient__appointment__status='ready_to_bill',
+                patientinsurance__patient__appointment__prescription__isnull=False,  # Nur Termine mit Verordnung
+                patientinsurance__patient__appointment__billing_items__isnull=True  # Noch nicht abgerechnete Termine
+            ).distinct()
 
-        for provider in insurance_providers:
-            try:
-                # Prüfe ob bereits ein Abrechnungszyklus existiert
-                existing_cycle = BillingCycle.objects.filter(
-                    insurance_provider=provider,
-                    start_date__lte=end_date,
-                    end_date__gte=start_date
-                ).first()
+            if not insurance_providers.exists():
+                return [{
+                    'insurance_provider': 'System',
+                    'status': 'skipped',
+                    'message': 'Keine abrechnungsbereiten Termine im angegebenen Zeitraum gefunden'
+                }]
 
-                if existing_cycle:
+            for provider in insurance_providers:
+                try:
+                    # Prüfe ob bereits ein Abrechnungszyklus existiert
+                    existing_cycle = BillingCycle.objects.filter(
+                        insurance_provider=provider,
+                        start_date__lte=end_date,
+                        end_date__gte=start_date
+                    ).first()
+
+                    if existing_cycle:
+                        results.append({
+                            'insurance_provider': provider.name,
+                            'status': 'skipped',
+                            'message': f'Bereits existierender Zyklus: {existing_cycle.id}'
+                        })
+                        continue
+
+                    # Finde alle abrechenbaren Termine für diese Krankenkasse
+                    appointments = BillingService.get_billable_appointments(
+                        start_date=start_date,
+                        end_date=end_date,
+                        insurance_provider=provider
+                    )
+
+                    if not appointments:
+                        results.append({
+                            'insurance_provider': provider.name,
+                            'status': 'skipped',
+                            'message': 'Keine abrechenbaren Termine gefunden'
+                        })
+                        continue
+
+                    # Erstelle neuen Abrechnungszyklus
+                    cycle = BillingService.create_billing_cycle(
+                        insurance_provider=provider,
+                        start_date=start_date,
+                        end_date=end_date
+                    )
+
+                    # Erstelle Abrechnungspositionen
+                    billing_items = BillingService.create_billing_items(cycle, appointments)
+
+                    # Aktualisiere die Gesamtbeträge
+                    cycle.update_totals()
+
                     results.append({
                         'insurance_provider': provider.name,
-                        'status': 'skipped',
-                        'message': f'Bereits existierender Zyklus: {existing_cycle.id}'
+                        'status': 'success',
+                        'cycle_id': cycle.id,
+                        'appointments_count': len(billing_items),
+                        'total_insurance_amount': str(cycle.total_insurance_amount),
+                        'total_patient_copay': str(cycle.total_patient_copay)
+                    })
+
+                except Exception as e:
+                    results.append({
+                        'insurance_provider': provider.name,
+                        'status': 'error',
+                        'message': str(e)
                     })
                     continue
 
-                # Finde alle abrechenbaren Termine für diese Krankenkasse
-                appointments = BillingService.get_billable_appointments(
-                    start_date=start_date,
-                    end_date=end_date,
-                    insurance_provider=provider
-                )
-
-                if not appointments:
-                    results.append({
-                        'insurance_provider': provider.name,
-                        'status': 'skipped',
-                        'message': 'Keine abrechenbaren Termine gefunden'
-                    })
-                    continue
-
-                # Erstelle neuen Abrechnungszyklus
-                cycle = BillingService.create_billing_cycle(
-                    insurance_provider=provider,
-                    start_date=start_date,
-                    end_date=end_date
-                )
-
-                # Erstelle Abrechnungspositionen
-                billing_items = BillingService.create_billing_items(cycle, appointments)
-
-                # Aktualisiere die Gesamtbeträge
-                cycle.update_totals()
-
-                results.append({
-                    'insurance_provider': provider.name,
-                    'status': 'success',
-                    'cycle_id': cycle.id,
-                    'appointments_count': len(billing_items),
-                    'total_insurance_amount': str(cycle.total_insurance_amount),
-                    'total_patient_copay': str(cycle.total_patient_copay)
-                })
-
-            except Exception as e:
-                results.append({
-                    'insurance_provider': provider.name,
-                    'status': 'error',
-                    'message': str(e)
-                })
-                continue
+        except Exception as e:
+            # Bei einem allgemeinen Fehler
+            results.append({
+                'insurance_provider': 'System',
+                'status': 'error',
+                'message': f'Allgemeiner Fehler bei der Massenabrechnung: {str(e)}'
+            })
 
         return results
 
@@ -108,29 +125,36 @@ class BulkBillingService:
         """
         preview = []
         
-        insurance_providers = InsuranceProvider.objects.filter(
-            patientinsurance__prescription__appointment__appointment_date__date__range=[start_date, end_date],
-            patientinsurance__prescription__appointment__status='ready_to_bill'
-        ).distinct()
+        try:
+            # Finde alle Krankenkassen mit abrechnungsbereiten Terminen
+            insurance_providers = InsuranceProvider.objects.filter(
+                patientinsurance__patient__appointment__appointment_date__date__range=[start_date, end_date],
+                patientinsurance__patient__appointment__status='ready_to_bill',
+                patientinsurance__patient__appointment__prescription__isnull=False
+            ).distinct()
 
-        for provider in insurance_providers:
-            appointments = Appointment.objects.filter(
-                appointment_date__date__range=[start_date, end_date],
-                status='ready_to_bill',
-                prescription__patient_insurance__insurance_provider=provider,
-                billing_items__isnull=True
-            )
+            for provider in insurance_providers:
+                appointments = Appointment.objects.filter(
+                    appointment_date__date__range=[start_date, end_date],
+                    status='ready_to_bill',
+                    prescription__patient_insurance__insurance_provider=provider,
+                    billing_items__isnull=True
+                )
 
-            if appointments.exists():
-                preview.append({
-                    'insurance_provider': provider.name,
-                    'appointments_count': appointments.count(),
-                    'existing_cycle': BillingCycle.objects.filter(
-                        insurance_provider=provider,
-                        start_date__lte=end_date,
-                        end_date__gte=start_date
-                    ).exists()
-                })
+                if appointments.exists():
+                    preview.append({
+                        'insurance_provider': provider.name,
+                        'appointments_count': appointments.count(),
+                        'existing_cycle': BillingCycle.objects.filter(
+                            insurance_provider=provider,
+                            start_date__lte=end_date,
+                            end_date__gte=start_date
+                        ).exists()
+                    })
+        except Exception as e:
+            # Bei Fehlern eine leere Vorschau zurückgeben
+            print(f"Fehler bei der Vorschau-Erstellung: {str(e)}")
+            return []
 
         return preview
 

@@ -69,7 +69,7 @@ function PrescriptionNew() {
           doctorsResponse
         ] = await Promise.all([
           api.get('patients/'),
-          api.get('icdcodes/'),
+          api.get('icd-codes/'),
           api.get('treatments/'),
           api.get('doctors/')
         ]);

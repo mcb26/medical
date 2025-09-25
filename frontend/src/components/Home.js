@@ -12,7 +12,6 @@ import {
   Chip,
   LinearProgress,
   useTheme,
-  useMediaQuery,
   Container,
   Grid,
   Card,
@@ -24,16 +23,8 @@ import {
   Warning as WarningIcon,
   Schedule as ScheduleIcon,
   Assignment as AssignmentIcon,
-  Home as HomeIcon,
-  TrendingUp as TrendingUpIcon,
-  NotificationsActive as NotificationsIcon,
-  Room as RoomIcon,
   Person as PersonIcon,
-  AccessTime as AccessTimeIcon,
-  CalendarToday as CalendarIcon,
-  LocalHospital as HospitalIcon,
   Euro as EuroIcon,
-  Assessment as AssessmentIcon,
   CheckCircle,
   People as PeopleIcon,
   Receipt as ReceiptIcon,
@@ -41,6 +32,56 @@ import {
 } from '@mui/icons-material';
 import api from '../api/axios';
 import { isAuthenticated, getUserProfile } from '../services/auth';
+
+// Hilfsfunktion für deutsche Status-Übersetzungen
+const getGermanStatus = (status) => {
+  const statusMap = {
+    'planned': 'Geplant',
+    'confirmed': 'Bestätigt',
+    'completed': 'Abgeschlossen',
+    'cancelled': 'Storniert',
+    'ready_to_bill': 'Abrechnungsbereit',
+    'billed': 'Abgerechnet',
+    'draft': 'Entwurf',
+    'ready': 'Bereit',
+    'sent': 'Versendet',
+    'paid': 'Bezahlt',
+    'open': 'Offen',
+    'closed': 'Geschlossen',
+    'active': 'Aktiv',
+    'inactive': 'Inaktiv',
+    'no_show': 'Nicht erschienen',
+    'Open': 'Offen',  // Fallback für Großschreibung
+    'Closed': 'Geschlossen'  // Fallback für Großschreibung
+  };
+  return statusMap[status] || status;
+};
+
+// Hilfsfunktion für Status-Farben (wie im Kalender)
+const getStatusColor = (status) => {
+  const colorMap = {
+    'ready_to_bill': '#4caf50', // Grün
+    'completed': '#1976d2',      // Blau
+    'cancelled': '#f44336',      // Rot
+    'no_show': '#424242',        // Dunkelgrau
+    'planned': '#ff9800',        // Orange
+    'confirmed': '#ff9800',      // Orange (wie planned)
+    'open': '#ff9800',           // Orange für offene Verordnungen
+    'closed': '#424242'          // Dunkelgrau für geschlossene Verordnungen
+  };
+  return colorMap[status] || '#ff9800'; // Standard: Orange
+};
+
+// Hilfsfunktion für deutsche Abrechnungsstatus-Übersetzungen
+const getGermanBillingStatus = (status) => {
+  const statusMap = {
+    'draft': 'Entwurf',
+    'ready': 'Bereit',
+    'sent': 'Versendet',
+    'paid': 'Bezahlt'
+  };
+  return statusMap[status] || status;
+};
 
 function Home() {
   const [appointments, setAppointments] = useState([]);
@@ -52,7 +93,6 @@ function Home() {
   const [currentUser, setCurrentUser] = useState(null);
   const navigate = useNavigate();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -81,10 +121,11 @@ function Home() {
           billingCyclesResponse
         ] = await Promise.all(promises);
         
-        setAppointments(appointmentsResponse.data);
-        setPrescriptions(prescriptionsResponse.data);
-        setPatients(patientsResponse.data);
-        setBillingCycles(billingCyclesResponse.data);
+        // Stelle sicher, dass wir Arrays erhalten
+        setAppointments(Array.isArray(appointmentsResponse.data) ? appointmentsResponse.data : []);
+        setPrescriptions(Array.isArray(prescriptionsResponse.data) ? prescriptionsResponse.data : []);
+        setPatients(Array.isArray(patientsResponse.data) ? patientsResponse.data : []);
+        setBillingCycles(Array.isArray(billingCyclesResponse.data) ? billingCyclesResponse.data : []);
         setLoading(false);
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -98,12 +139,18 @@ function Home() {
 
   // Filtere Daten für Therapeuten
   const getFilteredData = () => {
+    // Stelle sicher, dass alle Daten Arrays sind
+    const safeAppointments = Array.isArray(appointments) ? appointments : [];
+    const safePrescriptions = Array.isArray(prescriptions) ? prescriptions : [];
+    const safePatients = Array.isArray(patients) ? patients : [];
+    const safeBillingCycles = Array.isArray(billingCycles) ? billingCycles : [];
+
     if (!currentUser?.is_therapist) {
       return {
-        appointments,
-        prescriptions,
-        patients,
-        billingCycles
+        appointments: safeAppointments,
+        prescriptions: safePrescriptions,
+        patients: safePatients,
+        billingCycles: safeBillingCycles
       };
     }
 
@@ -111,54 +158,75 @@ function Home() {
     const therapistName = `${currentUser.first_name} ${currentUser.last_name}`;
     
     return {
-      appointments: appointments.filter(apt => 
-        apt.practitioner_name === therapistName
+      appointments: safeAppointments.filter(apt => 
+        apt && apt.practitioner_name === therapistName
       ),
-      prescriptions: prescriptions.filter(pres => 
-        pres.patient_name && appointments.some(apt => 
-          apt.practitioner_name === therapistName && 
+      prescriptions: safePrescriptions.filter(pres => 
+        pres && pres.patient_name && safeAppointments.some(apt => 
+          apt && apt.practitioner_name === therapistName && 
           apt.patient_name === pres.patient_name
         )
       ),
-      patients: patients.filter(patient => 
-        appointments.some(apt => 
-          apt.practitioner_name === therapistName && 
+      patients: safePatients.filter(patient => 
+        patient && safeAppointments.some(apt => 
+          apt && apt.practitioner_name === therapistName && 
           apt.patient_name === `${patient.first_name} ${patient.last_name}`
         )
       ),
-      billingCycles: billingCycles // Therapeuten sehen alle Abrechnungszyklen
+      billingCycles: safeBillingCycles // Therapeuten sehen alle Abrechnungszyklen
     };
   };
 
   const getTodayAppointments = () => {
     const today = new Date().toDateString();
+    // Stelle sicher, dass nur echte Termine (Appointments) angezeigt werden, keine Abwesenheiten
     return getFilteredData().appointments.filter(apt => 
-      new Date(apt.appointment_date).toDateString() === today
+      apt && 
+      apt.appointment_date && 
+      new Date(apt.appointment_date).toDateString() === today &&
+      // Zusätzliche Sicherheit: Prüfe, dass es ein echter Termin ist (hat patient, treatment, etc.)
+      apt.patient_name && 
+      apt.treatment_name &&
+      apt.practitioner_name
     );
   };
 
   const getUpcomingAppointments = () => {
     const now = new Date();
+    // Stelle sicher, dass nur echte Termine (Appointments) angezeigt werden, keine Abwesenheiten
     return getFilteredData().appointments.filter(apt => 
-      new Date(apt.appointment_date) > now
+      apt && 
+      apt.appointment_date && 
+      new Date(apt.appointment_date) > now &&
+      // Zusätzliche Sicherheit: Prüfe, dass es ein echter Termin ist (hat patient, treatment, etc.)
+      apt.patient_name && 
+      apt.treatment_name &&
+      apt.practitioner_name
     ).slice(0, 5);
   };
 
   const getUrgentPrescriptions = () => {
     return getFilteredData().prescriptions.filter(pres => 
-      pres.is_urgent || pres.status === 'Open'
+      pres && (pres.is_urgent || pres.status === 'Open')
     );
   };
 
   const getReadyToBillAppointments = () => {
+    // Stelle sicher, dass nur echte Termine (Appointments) angezeigt werden, keine Abwesenheiten
     return getFilteredData().appointments.filter(apt => 
-      apt.status === 'ready_to_bill'
+      apt && 
+      apt.status === 'ready_to_bill' &&
+      // Zusätzliche Sicherheit: Prüfe, dass es ein echter Termin ist (hat patient, treatment, etc.)
+      apt.patient_name && 
+      apt.treatment_name &&
+      apt.practitioner_name
     );
   };
 
   const getActiveBillingCycles = () => {
-    return billingCycles.filter(cycle => 
-      cycle.status === 'draft' || cycle.status === 'ready'
+    const safeBillingCycles = Array.isArray(billingCycles) ? billingCycles : [];
+    return safeBillingCycles.filter(cycle => 
+      cycle && (cycle.status === 'draft' || cycle.status === 'ready')
     );
   };
 
@@ -217,7 +285,7 @@ function Home() {
             <Card sx={{ p: 2, textAlign: 'center', cursor: 'pointer' }} onClick={() => navigate('/appointments')}>
               <EventIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
               <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                {getTodayAppointments().length}
+                {Array.isArray(getTodayAppointments()) ? getTodayAppointments().length : 0}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {currentUser?.is_therapist ? 'Ihre heutigen Termine' : 'Heutige Termine'}
@@ -229,7 +297,7 @@ function Home() {
             <Card sx={{ p: 2, textAlign: 'center', cursor: 'pointer' }} onClick={() => navigate('/patients')}>
               <PeopleIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
               <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'success.main' }}>
-                {filteredData.patients.length}
+                {Array.isArray(filteredData.patients) ? filteredData.patients.length : 0}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {currentUser?.is_therapist ? 'Ihre Patienten' : 'Aktive Patienten'}
@@ -286,9 +354,13 @@ function Home() {
                           secondary={`${new Date(appointment.appointment_date).toLocaleDateString('de-DE')} um ${new Date(appointment.appointment_date).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`}
                         />
                         <Chip 
-                          label={appointment.status} 
+                          label={getGermanStatus(appointment.status)} 
                           size="small" 
-                          color={appointment.status === 'confirmed' ? 'success' : 'default'}
+                          sx={{
+                            backgroundColor: getStatusColor(appointment.status),
+                            color: 'white',
+                            fontWeight: 'bold'
+                          }}
                         />
                       </ListItem>
                     ))}
@@ -317,13 +389,17 @@ function Home() {
                           <AssignmentIcon color="warning" />
                         </ListItemIcon>
                         <ListItemText
-                          primary={`${prescription.patient_name} - ${prescription.treatment_name}`}
+                          primary={`${prescription.patient_name} - ${prescription.treatment_name || 'Keine Behandlung'}`}
                           secondary={`Verordnung vom ${new Date(prescription.prescription_date).toLocaleDateString('de-DE')}`}
                         />
                         <Chip 
-                          label={prescription.status} 
+                          label={getGermanStatus(prescription.status)} 
                           size="small" 
-                          color={prescription.is_urgent ? 'error' : 'warning'}
+                          sx={{
+                            backgroundColor: prescription.is_urgent ? '#f44336' : getStatusColor(prescription.status),
+                            color: 'white',
+                            fontWeight: 'bold'
+                          }}
                         />
                       </ListItem>
                     ))}
@@ -348,25 +424,25 @@ function Home() {
                 </Typography>
                 <Divider sx={{ mb: 2 }} />
                 <List>
-                  <ListItem button onClick={() => navigate('/appointments/new')}>
+                  <ListItem component="button" onClick={() => navigate('/appointments/new')}>
                     <ListItemIcon>
                       <EventIcon />
                     </ListItemIcon>
                     <ListItemText primary="Neuen Termin erstellen" />
                   </ListItem>
-                  <ListItem button onClick={() => navigate('/patients/new')}>
+                  <ListItem component="button" onClick={() => navigate('/patients/new')}>
                     <ListItemIcon>
                       <PersonIcon />
                     </ListItemIcon>
                     <ListItemText primary="Neuen Patienten anlegen" />
                   </ListItem>
-                  <ListItem button onClick={() => navigate('/prescriptions/new')}>
+                  <ListItem component="button" onClick={() => navigate('/prescriptions/new')}>
                     <ListItemIcon>
                       <AssignmentIcon />
                     </ListItemIcon>
                     <ListItemText primary="Neue Verordnung erstellen" />
                   </ListItem>
-                  <ListItem button onClick={() => navigate('/billing')}>
+                  <ListItem component="button" onClick={() => navigate('/billing')}>
                     <ListItemIcon>
                       <ReceiptIcon />
                     </ListItemIcon>
@@ -394,7 +470,7 @@ function Home() {
                             secondary={`${new Date(cycle.start_date).toLocaleDateString('de-DE')} - ${new Date(cycle.end_date).toLocaleDateString('de-DE')}`}
                           />
                           <Chip 
-                            label={cycle.status} 
+                            label={getGermanBillingStatus(cycle.status)} 
                             size="small" 
                             color={cycle.status === 'ready' ? 'success' : 'default'}
                           />

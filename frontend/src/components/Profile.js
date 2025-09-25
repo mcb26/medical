@@ -143,7 +143,7 @@ function Profile() {
                 {profile?.first_name} {profile?.last_name}
               </Typography>
               <Typography variant="subtitle1" color="textSecondary">
-                {profile?.role || 'Mitarbeiter'}
+                {profile?.role?.name || profile?.role || 'Mitarbeiter'}
               </Typography>
             </Box>
           </Grid>

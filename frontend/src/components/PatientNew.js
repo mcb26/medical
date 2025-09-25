@@ -25,6 +25,7 @@ import {
 } from '@mui/icons-material';
 import api from '../api/axios';
 import { usePatientNotifications } from '../hooks/useNotifications';
+import { BUTTON_LABELS, FORM_LABELS, MESSAGES } from '../constants/germanLabels';
 
 function PatientNew() {
   const navigate = useNavigate();

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, TextField, MenuItem, Button, Typography } from '@mui/material';
-import axios from 'axios';
+import api from '../api/axios';
 
 function CopaymentForm() {
   const [prescriptions, setPrescriptions] = useState([]);
@@ -15,9 +15,7 @@ function CopaymentForm() {
 
   const fetchPrescriptions = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/prescriptions/', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
-      });
+      const response = await api.get('/prescriptions/');
       setPrescriptions(response.data);
     } catch (error) {
       console.error('Error fetching prescriptions:', error);
@@ -34,9 +32,7 @@ function CopaymentForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('http://localhost:8000/api/copayments/', formData, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
-      });
+      await api.post('/copayments/', formData);
       alert('Co-payment created successfully!');
     } catch (error) {
       console.error('Error creating co-payment:', error);

@@ -146,14 +146,14 @@ function DataOverview() {
         safeApiCall('/insurance-provider-groups/'),
         safeApiCall('/categories/'),
         safeApiCall('/specializations/'),
-        safeApiCall('/icdcodes/'),
+        safeApiCall('/icd-codes/'),
         safeApiCall('/diagnosis-groups/'),
         safeApiCall('/billing-cycles/'),
         safeApiCall('/surcharges/'),
         safeApiCall('/emergency-contacts/'),
         safeApiCall('/practice-settings/'),
         safeApiCall('/settings/'),
-        safeApiCall('/bundesland/'),
+        safeApiCall('/bundeslaender/'),
         safeApiCall('/local-holidays/'),
         safeApiCall('/working-hours/'),
         safeApiCall('/practice/')
@@ -429,15 +429,22 @@ function DataOverview() {
         <DataGrid
           rows={getValidRows(activeTab)}
           columns={getValidColumns(activeTab)}
-          pageSize={5}
-          rowsPerPageOptions={[5, 10, 20]}
-          checkboxSelection
-          disableSelectionOnClick
-          onSelectionModelChange={(newSelection) => {
-            setSelectedRows(newSelection);
+          loading={loading}
+          slots={{
+            toolbar: GridToolbar,
           }}
-          components={{
-            Toolbar: GridToolbar,
+          initialState={{
+            pagination: {
+              paginationModel: {
+                pageSize: 5,
+              },
+            },
+          }}
+          pageSizeOptions={[5, 10, 20]}
+          checkboxSelection
+          disableRowSelectionOnClick
+          onRowSelectionModelChange={(newSelection) => {
+            setSelectedRows(newSelection);
           }}
         />
       </Box>

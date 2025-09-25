@@ -1,422 +1,268 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { getUserProfile } from '../services/auth';
-import { usePrescriptionPermissions } from '../hooks/usePermissions';
+import React from 'react';
 import {
-  Box,
-  Typography,
-  Divider,
-  CircularProgress,
-  Button,
-  Alert,
-  Grid,
-  Paper,
-  FormControl,
-  FormControlLabel,
-  Checkbox,
-  TableContainer,
-  Table,
-  TableBody,
-  TableCell,
-  TableRow,
-  TableHead,
-  Chip,
-  CardContent
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Button,
+    Box,
+    Typography,
+    Grid,
+    Chip,
+    Divider,
+    Card,
+    CardContent
 } from '@mui/material';
-import {
-  Warning as WarningIcon,
-  Home as HomeIcon,
-  Assignment as AssignmentIcon,
-  PictureAsPdf as PictureAsPdfIcon,
-  Upload as UploadIcon,
-  ExpandMore as ExpandMoreIcon,
-  Event as EventIcon,
-  ArrowBack as ArrowBackIcon,
-  Edit as EditIcon
-} from '@mui/icons-material';
-import api from '../api/axios';
-import { FREQUENCY_CHOICES, getFrequencyLabel, STATUS_CONFIG } from '../constants/prescriptionConstants';
-import Accordion from '@mui/material/Accordion';
-import AccordionSummary from '@mui/material/AccordionSummary';
-import AccordionDetails from '@mui/material/AccordionDetails';
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import deLocale from '@fullcalendar/core/locales/de';
-import { format } from 'date-fns';
-import { de } from 'date-fns/locale';
-import AppointmentSeriesPreview from './AppointmentSeriesPreview';
+import { Close as CloseIcon } from '@mui/icons-material';
 
-function PrescriptionDetail() {
-  const { id } = useParams();
-  const navigate = useNavigate();
-  const [prescription, setPrescription] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [rooms, setRooms] = useState([]);
-  const [practitioners, setPractitioners] = useState([]);
-  const [appointments, setAppointments] = useState([]);
-  const [showSeriesPreview, setShowSeriesPreview] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-  const { canEdit, canDelete } = usePrescriptionPermissions();
+const PrescriptionDetail = ({ open, onClose, prescription }) => {
+    if (!prescription) return null;
 
-  useEffect(() => {
-    // Lade aktuellen Benutzer
-    const user = getUserProfile();
-    setCurrentUser(user);
-    
-    const fetchData = async () => {
-      try {
-        const [prescriptionResponse, practitionersResponse, roomsResponse, appointmentsResponse] = await Promise.all([
-          api.get(`/prescriptions/${id}/`),
-          api.get('/practitioners/'),
-          api.get('/rooms/'),
-          api.get(`/appointments/?prescription=${id}`)
-        ]);
-
-        console.log('Prescription Data:', prescriptionResponse.data);
-        console.log('Treatment Name:', prescriptionResponse.data.treatment_name);
-        console.log('Treatment Object:', prescriptionResponse.data.treatment);
-
-        setPrescription(prescriptionResponse.data);
-        setPractitioners(practitionersResponse.data);
-        setRooms(roomsResponse.data);
-        setAppointments(appointmentsResponse.data);
-        setLoading(false);
-      } catch (error) {
-        console.error('Fehler beim Laden der Daten:', error);
-        setError('Fehler beim Laden der Daten');
-        setLoading(false);
-      }
+    const getStatusColor = (status) => {
+        switch (status) {
+            case 'Open': return 'default';
+            case 'In_Progress': return 'primary';
+            case 'Completed': return 'success';
+            case 'Cancelled': return 'error';
+            case 'Extended': return 'warning';
+            default: return 'default';
+        }
     };
 
-    fetchData();
-  }, [id]);
+    const getStatusLabel = (status) => {
+        switch (status) {
+            case 'Open': return 'Offen';
+            case 'In_Progress': return 'In Bearbeitung';
+            case 'Completed': return 'Abgeschlossen';
+            case 'Cancelled': return 'Storniert';
+            case 'Extended': return 'Verlängert';
+            default: return status;
+        }
+    };
 
-  // Prüfe, ob der aktuelle Benutzer diese Verordnung bearbeiten darf
-  const canEditThisPrescription = () => {
-    if (!currentUser || !prescription) return false;
-    
-    // Admins können alles bearbeiten
-    if (currentUser.is_admin || currentUser.is_superuser) return canEdit;
-    
-    // Therapeuten können nur ihre eigenen Verordnungen bearbeiten
-    if (currentUser.is_therapist) {
-      // Prüfe, ob der Patient dieser Verordnung Termine bei diesem Therapeuten hat
-      const hasAppointmentsWithTherapist = appointments.some(appointment => {
-        const practitionerName = appointment.practitioner_name || '';
-        const userFullName = `${currentUser.first_name} ${currentUser.last_name}`;
-        return practitionerName === userFullName;
-      });
-      return canEdit && hasAppointmentsWithTherapist;
-    }
-    
-    return canEdit;
-  };
+    const getFrequencyLabel = (frequency) => {
+        switch (frequency) {
+            case 'weekly_1': return '1x pro Woche';
+            case 'weekly_2': return '2x pro Woche';
+            case 'weekly_3': return '3x pro Woche';
+            case 'weekly_4': return '4x pro Woche';
+            case 'weekly_5': return '5x pro Woche';
+            case 'monthly_1': return '1x pro Monat';
+            case 'monthly_2': return '2x pro Monat';
+            case 'monthly_3': return '3x pro Monat';
+            case 'monthly_4': return '4x pro Monat';
+            default: return frequency;
+        }
+    };
 
-  const canDeleteThisPrescription = () => {
-    if (!currentUser || !prescription) return false;
-    
-    // Admins können alles löschen
-    if (currentUser.is_admin || currentUser.is_superuser) return canDelete;
-    
-    // Therapeuten können Verordnungen nicht löschen
-    if (currentUser.is_therapist) return false;
-    
-    return canDelete;
-  };
-
-  const handlePdfUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append('pdf_document', file);
-
-    try {
-      await api.patch(`/prescriptions/${id}/`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      // Aktualisiere die Prescription-Daten nach dem Upload
-      const response = await api.get(`/prescriptions/${id}/`);
-      setPrescription(response.data);
-    } catch (error) {
-      console.error('Fehler beim PDF-Upload:', error);
-      setError('Fehler beim Hochladen des PDFs');
-    }
-  };
-
-  const handleEdit = () => {
-    navigate(`/prescriptions/${id}/edit`);
-  };
-
-  const handleCreateSeries = () => {
-    setShowSeriesPreview(true);
-  };
-
-  const handleCreateSeriesNew = () => {
-    navigate(`/appointments/series/new?prescriptionId=${id}`);
-  };
-
-  const handleSeriesConfirm = async (config) => {
-    try {
-      await api.post(`/appointments/series/${prescription.id}/`, config);
-      setShowSeriesPreview(false);
-      // Aktualisiere die Verordnungsdaten
-      const response = await api.get(`/prescriptions/${id}/`);
-      setPrescription(response.data);
-    } catch (error) {
-      console.error('Fehler beim Erstellen der Terminserie:', error);
-      setError('Fehler beim Erstellen der Terminserie');
-    }
-  };
-
-  const handleSeriesCancel = () => {
-    setShowSeriesPreview(false);
-  };
-
-  const renderCheckboxField = (checked, label) => (
-    <Box sx={{ 
-      border: '1px solid #ccc', 
-      p: 1, 
-      borderRadius: 1,
-      display: 'flex',
-      alignItems: 'center',
-      bgcolor: checked ? '#e3f2fd' : 'transparent'
-    }}>
-      <Checkbox checked={checked} readOnly />
-      <Typography variant="body2">{label}</Typography>
-    </Box>
-  );
-
-  // Funktion für die Statusfarbe
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Geplant': return 'info';
-      case 'Abgeschlossen': return 'success';
-      case 'Abgesagt': return 'error';
-      default: return 'default';
-    }
-  };
-
-  if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
-      </Box>
-    );
-  }
+        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+            <DialogTitle>
+                <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Typography variant="h6">Verordnungsdetails</Typography>
+                    <Button onClick={onClose} startIcon={<CloseIcon />}>
+                        Schließen
+                    </Button>
+                </Box>
+            </DialogTitle>
 
-  if (error) {
-    return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error">{error}</Alert>
-      </Box>
-    );
-  }
+            <DialogContent>
+                <Grid container spacing={3}>
+                    <Grid item xs={12}>
+                        <Card>
+                            <CardContent>
+                                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                                    <Typography variant="h6">Grundinformationen</Typography>
+                                    <Chip 
+                                        label={getStatusLabel(prescription.status)} 
+                                        color={getStatusColor(prescription.status)}
+                                    />
+                                </Box>
+                                
+                                <Grid container spacing={2}>
+                                    <Grid item xs={12} md={6}>
+                                        <Typography variant="subtitle2" color="text.secondary">
+                                            Patient
+                                        </Typography>
+                                        <Typography variant="body1">
+                                            {prescription.patient_name} ({prescription.patient_birth_date})
+                                        </Typography>
+                                    </Grid>
+                                    
+                                    <Grid item xs={12} md={6}>
+                                        <Typography variant="subtitle2" color="text.secondary">
+                                            Arzt
+                                        </Typography>
+                                        <Typography variant="body1">
+                                            {prescription.doctor_name}
+                                        </Typography>
+                                    </Grid>
+                                    
+                                    <Grid item xs={12} md={6}>
+                                        <Typography variant="subtitle2" color="text.secondary">
+                                            Verordnungsdatum
+                                        </Typography>
+                                        <Typography variant="body1">
+                                            {prescription.prescription_date}
+                                        </Typography>
+                                    </Grid>
+                                    
+                                    <Grid item xs={12} md={6}>
+                                        <Typography variant="subtitle2" color="text.secondary">
+                                            Anzahl Sitzungen
+                                        </Typography>
+                                        <Typography variant="body1">
+                                            {prescription.number_of_sessions}
+                                        </Typography>
+                                    </Grid>
+                                    
+                                    <Grid item xs={12} md={6}>
+                                        <Typography variant="subtitle2" color="text.secondary">
+                                            Abgeschlossene Sitzungen
+                                        </Typography>
+                                        <Typography variant="body1">
+                                            {prescription.sessions_completed || 0}
+                                        </Typography>
+                                    </Grid>
+                                    
+                                    <Grid item xs={12} md={6}>
+                                        <Typography variant="subtitle2" color="text.secondary">
+                                            Therapiehäufigkeit
+                                        </Typography>
+                                        <Typography variant="body1">
+                                            {getFrequencyLabel(prescription.therapy_frequency_type)}
+                                        </Typography>
+                                    </Grid>
+                                    
+                                    <Grid item xs={12} md={6}>
+                                        <Typography variant="subtitle2" color="text.secondary">
+                                            Krankenkasse
+                                        </Typography>
+                                        <Typography variant="body1">
+                                            {prescription.insurance_provider_name} ({prescription.insurance_number})
+                                        </Typography>
+                                    </Grid>
+                                </Grid>
+                            </CardContent>
+                        </Card>
+                    </Grid>
 
-  if (!prescription) {
-    return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="info">Verordnung nicht gefunden</Alert>
-      </Box>
-    );
-  }
+                    <Grid item xs={12}>
+                        <Card>
+                            <CardContent>
+                                <Typography variant="h6" mb={2}>Behandlungen</Typography>
+                                <Typography variant="body1" mb={2}>
+                                    {prescription.all_treatment_names}
+                                </Typography>
+                                
+                                <Grid container spacing={2}>
+                                    {prescription.treatment_1 && (
+                                        <Grid item xs={12} md={4}>
+                                            <Typography variant="subtitle2" color="text.secondary">
+                                                Behandlung 1
+                                            </Typography>
+                                            <Typography variant="body1">
+                                                {prescription.treatment_name}
+                                            </Typography>
+                                        </Grid>
+                                    )}
+                                    
+                                    {prescription.treatment_2 && prescription.treatment_2_name && (
+                                        <Grid item xs={12} md={4}>
+                                            <Typography variant="subtitle2" color="text.secondary">
+                                                Behandlung 2
+                                            </Typography>
+                                            <Typography variant="body1">
+                                                {prescription.treatment_2_name}
+                                            </Typography>
+                                        </Grid>
+                                    )}
+                                    
+                                    {prescription.treatment_3 && prescription.treatment_3_name && (
+                                        <Grid item xs={12} md={4}>
+                                            <Typography variant="subtitle2" color="text.secondary">
+                                                Behandlung 3
+                                            </Typography>
+                                            <Typography variant="body1">
+                                                {prescription.treatment_3_name}
+                                            </Typography>
+                                        </Grid>
+                                    )}
+                                </Grid>
+                            </CardContent>
+                        </Card>
+                    </Grid>
 
-  if (showSeriesPreview) {
-    return (
-      <AppointmentSeriesPreview
-        prescription={prescription}
-        onConfirm={handleSeriesConfirm}
-        onCancel={handleSeriesCancel}
-      />
-    );
-  }
+                    <Grid item xs={12}>
+                        <Card>
+                            <CardContent>
+                                <Typography variant="h6" mb={2}>Diagnose</Typography>
+                                <Typography variant="body1">
+                                    {prescription.diagnosis_code_display}
+                                </Typography>
+                            </CardContent>
+                        </Card>
+                    </Grid>
 
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <Box component="main" sx={{ flexGrow: 1, p: 0 }}>
-        <Box sx={{ mx: 0 }}>
-          {/* Header */}
-          <Paper elevation={3} sx={{ p: 3, mb: 3, borderRadius: 2, backgroundColor: '#f5f5f5' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Button
-                startIcon={<ArrowBackIcon />}
-                onClick={() => navigate('/prescriptions')}
-              >
-                Zurück zur Liste
-              </Button>
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                {canEditThisPrescription() && (
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    startIcon={<EditIcon />}
-                    onClick={handleEdit}
-                  >
-                    Bearbeiten
-                  </Button>
-                )}
-                <Button
-                  variant="outlined"
-                  color="primary"
-                  onClick={handleCreateSeriesNew}
-                >
-                  Neue Terminserie 
+                    {(prescription.therapy_goals && prescription.therapy_goals.trim() !== '') && (
+                        <Grid item xs={12}>
+                            <Card>
+                                <CardContent>
+                                    <Typography variant="h6" mb={2}>Therapieziele</Typography>
+                                    <Typography variant="body1">
+                                        {prescription.therapy_goals}
+                                    </Typography>
+                                </CardContent>
+                            </Card>
+                        </Grid>
+                    )}
+
+                    <Grid item xs={12}>
+                        <Card>
+                            <CardContent>
+                                <Typography variant="h6" mb={2}>Besondere Anforderungen</Typography>
+                                <Box display="flex" gap={1} flexWrap="wrap">
+                                    {prescription.is_urgent && (
+                                        <Chip label="Dringend" color="error" size="small" />
+                                    )}
+                                    {prescription.requires_home_visit && (
+                                        <Chip label="Hausbesuch" color="primary" size="small" />
+                                    )}
+                                    {prescription.therapy_report_required && (
+                                        <Chip label="Therapiebericht erforderlich" color="warning" size="small" />
+                                    )}
+                                    {!prescription.is_urgent && !prescription.requires_home_visit && !prescription.therapy_report_required && (
+                                        <Typography variant="body2" color="text.secondary">
+                                            Keine besonderen Anforderungen
+                                        </Typography>
+                                    )}
+                                </Box>
+                            </CardContent>
+                        </Card>
+                    </Grid>
+
+                    {prescription.is_follow_up && (
+                        <Grid item xs={12}>
+                            <Card>
+                                <CardContent>
+                                    <Typography variant="h6" mb={2}>Folgeverordnung</Typography>
+                                    <Typography variant="body1">
+                                        Folgeverordnung {prescription.follow_up_number}
+                                    </Typography>
+                                </CardContent>
+                            </Card>
+                        </Grid>
+                    )}
+                </Grid>
+            </DialogContent>
+
+            <DialogActions>
+                <Button onClick={onClose}>
+                    Schließen
                 </Button>
-              </Box>
-            </Box>
-          </Paper>
-
-          {/* Berechtigungshinweis für Therapeuten */}
-          {currentUser?.is_therapist && prescription && (
-            <Alert severity="info" sx={{ mb: 3 }}>
-              {canEditThisPrescription() 
-                ? "Dies ist Ihre Verordnung - Sie können sie bearbeiten."
-                : "Dies ist nicht Ihre Verordnung - Sie können sie nur anzeigen."
-              }
-            </Alert>
-          )}
-
-          {/* Content */}
-          <Paper elevation={3} sx={{ borderRadius: 2 }}>
-            <CardContent>
-              <Grid container spacing={3}>
-                <Grid item xs={12}>
-                  <Typography variant="h5" gutterBottom>
-                    Verordnungsdetails
-                  </Typography>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Patient
-                  </Typography>
-                  <Typography variant="body1">
-                    {prescription.patient_name}
-                  </Typography>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Verordnungsdatum
-                  </Typography>
-                  <Typography variant="body1">
-                    {format(new Date(prescription.prescription_date), 'dd.MM.yyyy', { locale: de })}
-                  </Typography>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Arzt
-                  </Typography>
-                  <Typography variant="body1">
-                    {prescription.doctor_name}
-                  </Typography>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Status
-                  </Typography>
-                  <Chip
-                    label={STATUS_CONFIG[prescription.status]?.label || prescription.status}
-                    color={STATUS_CONFIG[prescription.status]?.color || 'default'}
-                  />
-                </Grid>
-
-                <Grid item xs={12}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Behandlungen
-                  </Typography>
-                  <Box sx={{ mt: 1 }}>
-                    {prescription.treatment_1_name && (
-                      <Chip label={prescription.treatment_1_name} sx={{ mr: 1, mb: 1 }} />
-                    )}
-                    {prescription.treatment_2_name && (
-                      <Chip label={prescription.treatment_2_name} sx={{ mr: 1, mb: 1 }} />
-                    )}
-                    {prescription.treatment_3_name && (
-                      <Chip label={prescription.treatment_3_name} sx={{ mr: 1, mb: 1 }} />
-                    )}
-                  </Box>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Diagnose
-                  </Typography>
-                  <Typography variant="body1">
-                    {prescription.diagnosis_code_display}
-                  </Typography>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Diagnosetext
-                  </Typography>
-                  <Typography variant="body1">
-                    {prescription.diagnosis_text}
-                  </Typography>
-                </Grid>
-
-                <Grid item xs={12} md={4}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Anzahl Behandlungen
-                  </Typography>
-                  <Typography variant="body1">
-                    {prescription.number_of_sessions}
-                  </Typography>
-                </Grid>
-
-                <Grid item xs={12} md={4}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Durchgeführte Behandlungen
-                  </Typography>
-                  <Typography variant="body1">
-                    {prescription.sessions_completed}
-                  </Typography>
-                </Grid>
-
-                <Grid item xs={12} md={4}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Frequenz
-                  </Typography>
-                  <Typography variant="body1">
-                    {prescription.therapy_frequency_type}
-                  </Typography>
-                </Grid>
-
-                <Grid item xs={12}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Therapieziele
-                  </Typography>
-                  <Typography variant="body1">
-                    {prescription.therapy_goals}
-                  </Typography>
-                </Grid>
-
-                <Grid item xs={12}>
-                  <Box sx={{ mt: 2 }}>
-                    {prescription.is_urgent && (
-                      <Chip label="Dringend" color="error" sx={{ mr: 1, mb: 1 }} />
-                    )}
-                    {prescription.requires_home_visit && (
-                      <Chip label="Hausbesuch erforderlich" color="warning" sx={{ mr: 1, mb: 1 }} />
-                    )}
-                    {prescription.therapy_report_required && (
-                      <Chip label="Therapiebericht erforderlich" color="info" sx={{ mr: 1, mb: 1 }} />
-                    )}
-                  </Box>
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Paper>
-        </Box>
-      </Box>
-    </Box>
-  );
-}
+            </DialogActions>
+        </Dialog>
+    );
+};
 
 export default PrescriptionDetail;

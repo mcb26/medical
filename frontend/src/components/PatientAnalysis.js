@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Typography, Paper, CircularProgress, Alert } from '@mui/material';
-import axios from 'axios';
+import api from '../api/axios';
 
 function PatientAnalysis() {
   const [demographics, setDemographics] = useState({});
@@ -16,20 +16,6 @@ function PatientAnalysis() {
   const fetchAllData = async () => {
     setLoading(true);
     setError(null);
-
-    const token = localStorage.getItem('accessToken');
-    if (!token) {
-      setError('Unauthorized: No access token found.');
-      setLoading(false);
-      return;
-    }
-
-    const api = axios.create({
-      baseURL: 'http://localhost:8000/api/',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
 
     try {
       const [demographicsRes, treatmentStatsRes, appointmentStatsRes] = await Promise.all([

@@ -148,12 +148,21 @@ const RoomsCalendar = ({
                 start: ev.appointment_date,
                 end: new Date(new Date(ev.appointment_date).getTime() + (ev.duration_minutes || 30) * 60000).toISOString(),
                 resourceId: `room-${ev.room}`,
+                backgroundColor: ev.status === 'ready_to_bill' ? '#4caf50' : 
+                                ev.status === 'completed' ? '#1976d2' : 
+                                ev.status === 'cancelled' ? '#f44336' : 
+                                ev.status === 'no_show' ? '#424242' : '#ff9800',
+                borderColor: ev.status === 'ready_to_bill' ? '#4caf50' : 
+                           ev.status === 'completed' ? '#1976d2' : 
+                           ev.status === 'cancelled' ? '#f44336' : 
+                           ev.status === 'no_show' ? '#424242' : '#ff9800',
                 extendedProps: {
                     treatment_name: ev.treatment_name,
                     patient_name: ev.patient_name,
                     duration_minutes: ev.duration_minutes,
                     status: ev.status,
-                    treatment_color: ev.treatment_color
+                    treatment_color: ev.treatment_color,
+                    practitioner_name: ev.practitioner_name
                 }
             }))}
             resourceType="rooms"

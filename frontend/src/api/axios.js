@@ -30,10 +30,12 @@ api.interceptors.request.use(
 api.interceptors.response.use(
     (response) => response,
     (error) => {
+        console.log('Axios Error:', error.response?.status, error.response?.data);
         if (error.response?.status === 401) {
             localStorage.removeItem('token');
             localStorage.removeItem('refreshToken');
-            window.location.href = '/login';
+            // Nicht automatisch zur Login-Seite weiterleiten
+            console.log('401 Error - Token entfernt');
         }
         
         return Promise.reject(error);

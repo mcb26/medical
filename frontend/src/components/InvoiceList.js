@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography } from '@mui/material';
-import axios from 'axios';
+import { Box, Typography, List, ListItem, ListItemText, Button } from '@mui/material';
+import api from '../api/axios';
 
 function InvoiceList() {
   const [invoices, setInvoices] = useState([]);
@@ -11,9 +11,7 @@ function InvoiceList() {
 
   const fetchInvoices = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/invoices/', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
-      });
+      const response = await api.get('/invoices/');
       setInvoices(response.data);
     } catch (error) {
       console.error('Error fetching invoices:', error);

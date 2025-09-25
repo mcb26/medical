@@ -17,7 +17,6 @@ from .billing_views import (
     mark_invoice_as_paid
 )
 
-from .user_views import UserViewSet
 from .data_views import (
     DiagnosisGroupViewSet,
     SurchargeViewSet,

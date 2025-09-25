@@ -22,12 +22,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure--c*g)(jikppbee1k8_$k2e^)s6t0frt3+s3#0o63#y1117_%vu'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure--c*g)(jikppbee1k8_$k2e^)s6t0frt3+s3#0o63#y1117_%vu')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 
 
@@ -67,16 +67,34 @@ REST_FRAMEWORK = {
     ),
 }
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "https://localhost:3000",
-    "http://192.168.2.125:3000",
-    "https://192.168.2.125:3000"
-]
+# CORS-Konfiguration
+CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 
+    "http://localhost:3000,https://localhost:3000"
+).split(',')
 
 CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOW_ALL_ORIGINS = False
+
+# Sicherheitseinstellungen für Produktion
+if not DEBUG:
+    # HTTPS erzwingen
+    SECURE_SSL_REDIRECT = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    
+    # Sichere Cookies
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    
+    # Security Headers
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_HSTS_SECONDS = 31536000  # 1 Jahr
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    
+    # X-Frame-Options
+    X_FRAME_OPTIONS = 'DENY'
 
 # Zusätzliche CORS-Einstellungen für Token-Endpunkte
 CORS_ALLOW_METHODS = [
@@ -201,28 +219,78 @@ SIMPLE_JWT = {
 
 AUTH_USER_MODEL = 'core.User'
 
+# Cache Konfiguration
+CACHE_BACKEND = os.environ.get('CACHE_BACKEND', 'locmem')
+
+if CACHE_BACKEND == 'redis':
+    # Redis für Produktion
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/1'),
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'CONNECTION_POOL_KWARGS': {
+                    'max_connections': 50,
+                },
+                'SERIALIZER': 'django_redis.serializers.json.JSONSerializer',
+            },
+            'TIMEOUT': 300,  # 5 Minuten
+        }
+    }
+else:
+    # Lokaler Memory Cache für Entwicklung
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'unique-snowflake',
+            'TIMEOUT': 300,  # 5 Minuten
+            'OPTIONS': {
+                'MAX_ENTRIES': 1000,
+            }
+        }
+    }
+
 # Logging Konfiguration
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
         },
         'file': {
             'class': 'logging.FileHandler',
             'filename': 'debug.log',
+            'formatter': 'verbose',
         },
     },
     'loggers': {
         'django': {
             'handlers': ['console', 'file'],
-            'level': 'DEBUG',
+            'level': 'INFO',
+            'propagate': False,
         },
-        'core': {  # Für unsere App
+        'core': {
             'handlers': ['console', 'file'],
             'level': 'DEBUG',
             'propagate': True,
+        },
+        'django.db.backends': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
         },
     },
 }

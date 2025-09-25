@@ -17,11 +17,19 @@ import {
   TextField,
   Grid,
   Alert,
-  IconButton
+  IconButton,
+  Chip,
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
-import { format, addDays, parseISO } from 'date-fns';
+import { format, addDays, parseISO, isWithinInterval, parseISO as parseDate } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
+import { Delete as DeleteIcon, Edit as EditIcon, Warning as WarningIcon, Block as BlockIcon } from '@mui/icons-material';
 import api from '../api/axios';
 
 function AppointmentSeriesPreview({ prescription, onConfirm, onCancel }) {
@@ -40,17 +48,27 @@ function AppointmentSeriesPreview({ prescription, onConfirm, onCancel }) {
   const [selectedTreatment, setSelectedTreatment] = useState('');
   const [treatmentOptions, setTreatmentOptions] = useState([]);
   const [treatment, setTreatment] = useState(null);
+  
+  // Abwesenheiten
+  const [absences, setAbsences] = useState([]);
+  
+  // Dialog für Abwesenheits-Bearbeitung
+  const [absenceDialogOpen, setAbsenceDialogOpen] = useState(false);
+  const [selectedAbsence, setSelectedAbsence] = useState(null);
+  const [editingAbsence, setEditingAbsence] = useState(null);
 
-  // Lade Behandler und Räume
+  // Lade Behandler, Räume und Abwesenheiten
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [practitionersRes, roomsRes] = await Promise.all([
+        const [practitionersRes, roomsRes, absencesRes] = await Promise.all([
           api.get('/practitioners/'),
-          api.get('/rooms/')
+          api.get('/rooms/'),
+          api.get('/absences/')
         ]);
         setPractitioners(practitionersRes.data);
         setRooms(roomsRes.data);
+        setAbsences(absencesRes.data);
       } catch (error) {
         setError('Fehler beim Laden der Daten');
       }
@@ -58,15 +76,39 @@ function AppointmentSeriesPreview({ prescription, onConfirm, onCancel }) {
     fetchData();
   }, []);
 
-  // Lade Behandlungsoptionen aus der Verordnung
+  // Lade Behandlungsoptionen aus der Verordnung und setze Standardwerte
   useEffect(() => {
-    const options = [];
-    if (prescription.treatment_1) options.push(prescription.treatment_1);
-    if (prescription.treatment_2) options.push(prescription.treatment_2);
-    if (prescription.treatment_3) options.push(prescription.treatment_3);
-    setTreatmentOptions(options);
-    if (options.length > 0) setSelectedTreatment(options[0]);
-  }, [prescription]);
+    if (prescription) {
+      const options = [];
+      if (prescription.treatment_1) options.push(prescription.treatment_1);
+      if (prescription.treatment_2) options.push(prescription.treatment_2);
+      if (prescription.treatment_3) options.push(prescription.treatment_3);
+      setTreatmentOptions(options);
+      
+      // Setze die erste Behandlung als Standard
+      if (options.length > 0) {
+        setSelectedTreatment(options[0]);
+      }
+      
+      // Setze Standardwerte basierend auf der Verordnung
+      if (prescription.therapy_frequency_type) {
+        // Konvertiere Verordnungsfrequenz zu Serie-Frequenz
+        if (prescription.therapy_frequency_type.includes('weekly')) {
+          setFrequency('weekly');
+        } else if (prescription.therapy_frequency_type.includes('monthly')) {
+          setFrequency('monthly');
+        } else {
+          setFrequency('weekly'); // Standard
+        }
+      }
+      
+      // Setze Startdatum auf heute, falls nicht gesetzt
+      if (!startDate) {
+        const today = new Date();
+        setStartDate(today.toISOString().split('T')[0]);
+      }
+    }
+  }, [prescription, startDate]);
 
   // Lade Details zur gewählten Behandlung
   useEffect(() => {
@@ -84,6 +126,54 @@ function AppointmentSeriesPreview({ prescription, onConfirm, onCancel }) {
     };
     fetchTreatment();
   }, [selectedTreatment]);
+
+  // Hilfsfunktion für Abwesenheits-Typ-Anzeige
+  const getAbsenceTypeDisplay = (absenceType) => {
+    const typeMap = {
+      'vacation': 'Urlaub',
+      'sick': 'Krankheit',
+      'parental_leave': 'Elternzeit',
+      'special_leave': 'Sonderurlaub',
+      'training': 'Fortbildung',
+      'other': 'Sonstiges'
+    };
+    return typeMap[absenceType] || absenceType;
+  };
+
+  // Hilfsfunktion für Datums-Formatierung
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return format(date, 'dd.MM.yyyy', { locale: de });
+  };
+
+  // Funktion zur Überprüfung von Abwesenheiten
+  const checkAbsenceConflict = (appointmentDate, practitionerId) => {
+    const appointmentDateTime = new Date(appointmentDate);
+    const appointmentDateOnly = appointmentDateTime.toISOString().split('T')[0];
+    const appointmentTime = appointmentDateTime.toTimeString().slice(0, 5);
+    
+    return absences.find(absence => {
+      if (absence.practitioner !== practitionerId) return false;
+      
+      const absenceStart = new Date(absence.start_date);
+      const absenceEnd = new Date(absence.end_date);
+      const appointmentDateObj = new Date(appointmentDateOnly);
+      
+      // Prüfe ob das Termindatum innerhalb der Abwesenheit liegt
+      if (appointmentDateObj >= absenceStart && appointmentDateObj <= absenceEnd) {
+        if (absence.is_full_day) {
+          return true; // Ganztägige Abwesenheit
+        } else {
+          // Stundenweise Abwesenheit prüfen
+          const absenceStartTime = absence.start_time;
+          const absenceEndTime = absence.end_time;
+          return appointmentTime >= absenceStartTime && appointmentTime < absenceEndTime;
+        }
+      }
+      return false;
+    });
+  };
 
   const generatePreview = () => {
     if (!selectedPractitioner || !selectedRoom || !startDate) {
@@ -110,6 +200,8 @@ function AppointmentSeriesPreview({ prescription, onConfirm, onCancel }) {
 
     for (let i = 0; i < prescription.number_of_sessions; i++) {
       const appointmentDate = addDays(startDateTime, i * intervalDays);
+      const absenceConflict = checkAbsenceConflict(appointmentDate.toISOString(), parseInt(selectedPractitioner));
+      
       appointments.push({
         appointment_date: appointmentDate.toISOString(),
         practitioner: parseInt(selectedPractitioner),
@@ -117,7 +209,9 @@ function AppointmentSeriesPreview({ prescription, onConfirm, onCancel }) {
         duration_minutes: durationMinutes,
         treatment: treatment.id,
         prescription: parseInt(prescription.id),
-        patient: parseInt(prescription.patient)
+        patient: parseInt(prescription.patient),
+        hasAbsenceConflict: !!absenceConflict,
+        absenceConflict: absenceConflict
       });
     }
     setPreviewAppointments(appointments);
@@ -138,27 +232,44 @@ function AppointmentSeriesPreview({ prescription, onConfirm, onCancel }) {
       return;
     }
 
-    const requestData = {
-      prescription: parseInt(prescription.id),
-      start_date: startDate, // Format: YYYY-MM-DD
-      frequency: frequency === 'weekly' ? 7 : 1,
-      practitioner_id: parseInt(selectedPractitioner),
-      room_id: parseInt(selectedRoom),
-      treatment_id: treatment.id,
-      number_of_sessions: prescription.number_of_sessions
-    };
+    // Filtere Termine mit ungelösten Abwesenheits-Konflikten
+    const appointmentsWithUnresolvedConflicts = previewAppointments.filter(
+      apt => apt.hasAbsenceConflict && !apt.ignoreAbsenceConflict
+    );
+
+    if (appointmentsWithUnresolvedConflicts.length > 0) {
+      setError(`Es gibt noch ${appointmentsWithUnresolvedConflicts.length} Termine mit Abwesenheits-Konflikten. Bitte lösen Sie diese zuerst auf.`);
+      return;
+    }
+
+    // Erstelle nur die Termine ohne Konflikte oder mit ignorierten Konflikten
+    const validAppointments = previewAppointments.filter(
+      apt => !apt.hasAbsenceConflict || apt.ignoreAbsenceConflict
+    );
 
     try {
-      const response = await api.post(
-        `/prescriptions/${prescription.id}/create-series/`,
-        requestData
-      );
-      if (response.status === 201) {
-        setSuccess('Termine wurden erfolgreich erstellt');
-        onConfirm(response.data.appointments);
+      // Erstelle die Termine einzeln
+      const createdAppointments = [];
+      for (const appointment of validAppointments) {
+        const appointmentData = {
+          patient: appointment.patient,
+          practitioner: appointment.practitioner,
+          appointment_date: appointment.appointment_date,
+          treatment: appointment.treatment,
+          prescription: appointment.prescription,
+          duration_minutes: appointment.duration_minutes,
+          room: appointment.room,
+          notes: appointment.ignoreAbsenceConflict ? 'Abwesenheits-Konflikt ignoriert' : ''
+        };
+
+        const response = await api.post('/appointments/', appointmentData);
+        createdAppointments.push(response.data);
       }
+
+      setSuccess(`${createdAppointments.length} Termine wurden erfolgreich erstellt`);
+      onConfirm(createdAppointments);
     } catch (error) {
-      setError(JSON.stringify(error.response?.data));
+      setError(`Fehler beim Erstellen der Termine: ${error.response?.data?.message || error.message}`);
     }
   };
 
@@ -169,10 +280,115 @@ function AppointmentSeriesPreview({ prescription, onConfirm, onCancel }) {
   const handleEditAppointment = (index, field, value) => {
     setPreviewAppointments(prev => prev.map((appointment, i) => {
       if (i === index) {
-        return { ...appointment, [field]: value };
+        const updatedAppointment = { ...appointment, [field]: value };
+        
+        // Wenn sich Datum oder Behandler geändert hat, Abwesenheits-Konflikt neu prüfen
+        if (field === 'appointment_date' || field === 'practitioner') {
+          const absenceConflict = checkAbsenceConflict(
+            updatedAppointment.appointment_date, 
+            updatedAppointment.practitioner
+          );
+          updatedAppointment.hasAbsenceConflict = !!absenceConflict;
+          updatedAppointment.absenceConflict = absenceConflict;
+        }
+        
+        return updatedAppointment;
       }
       return appointment;
     }));
+  };
+
+  const handleIgnoreAbsenceConflict = (index) => {
+    setPreviewAppointments(prev => prev.map((appointment, i) => {
+      if (i === index) {
+        return { ...appointment, ignoreAbsenceConflict: true };
+      }
+      return appointment;
+    }));
+  };
+
+  // Abwesenheits-Dialog Funktionen
+  const handleAbsenceClick = (absence) => {
+    setSelectedAbsence(absence);
+    setEditingAbsence({
+      ...absence,
+      start_date: absence.start_date,
+      end_date: absence.end_date,
+      start_time: absence.start_time || '08:00',
+      end_time: absence.end_time || '17:00'
+    });
+    setAbsenceDialogOpen(true);
+  };
+
+  const handleAbsenceEdit = async () => {
+    try {
+      await api.put(`/absences/${editingAbsence.id}/`, editingAbsence);
+      
+      // Aktualisiere die lokalen Abwesenheiten
+      setAbsences(prev => prev.map(abs => 
+        abs.id === editingAbsence.id ? editingAbsence : abs
+      ));
+      
+      // Aktualisiere die Vorschau-Termine
+      setPreviewAppointments(prev => prev.map(appointment => {
+        if (appointment.absenceConflict?.id === editingAbsence.id) {
+          const newConflict = { ...editingAbsence };
+          const hasConflict = checkAbsenceConflict(appointment.appointment_date, appointment.practitioner);
+          return {
+            ...appointment,
+            hasAbsenceConflict: !!hasConflict,
+            absenceConflict: hasConflict
+          };
+        }
+        return appointment;
+      }));
+      
+      setAbsenceDialogOpen(false);
+      setSelectedAbsence(null);
+      setEditingAbsence(null);
+    } catch (error) {
+      console.error('Fehler beim Bearbeiten der Abwesenheit:', error);
+      setError('Fehler beim Bearbeiten der Abwesenheit');
+    }
+  };
+
+  const handleAbsenceDelete = async () => {
+    if (!window.confirm('Diese Abwesenheit wirklich löschen?')) {
+      return;
+    }
+
+    try {
+      await api.delete(`/absences/${editingAbsence.id}/`);
+      
+      // Entferne die Abwesenheit aus der lokalen Liste
+      setAbsences(prev => prev.filter(abs => abs.id !== editingAbsence.id));
+      
+      // Aktualisiere die Vorschau-Termine
+      setPreviewAppointments(prev => prev.map(appointment => {
+        if (appointment.absenceConflict?.id === editingAbsence.id) {
+          const hasConflict = checkAbsenceConflict(appointment.appointment_date, appointment.practitioner);
+          return {
+            ...appointment,
+            hasAbsenceConflict: !!hasConflict,
+            absenceConflict: hasConflict
+          };
+        }
+        return appointment;
+      }));
+      
+      setAbsenceDialogOpen(false);
+      setSelectedAbsence(null);
+      setEditingAbsence(null);
+    } catch (error) {
+      console.error('Fehler beim Löschen der Abwesenheit:', error);
+      setError('Fehler beim Löschen der Abwesenheit');
+    }
+  };
+
+  const handleAbsenceDialogClose = () => {
+    setAbsenceDialogOpen(false);
+    setSelectedAbsence(null);
+    setEditingAbsence(null);
   };
 
   return (
@@ -190,6 +406,39 @@ function AppointmentSeriesPreview({ prescription, onConfirm, onCancel }) {
       {success && (
         <Alert severity="success" sx={{ mb: 2 }}>
           {success}
+        </Alert>
+      )}
+
+      {/* Verordnungsdaten Anzeige */}
+      {prescription && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          <Typography variant="subtitle2" gutterBottom>
+            <strong>Verordnungsdaten (vorbelegt):</strong>
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="body2">
+                <strong>Patient:</strong> {prescription.patient_name}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Behandlung:</strong> {prescription.treatment_1_name || 'Nicht angegeben'}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Versicherung:</strong> {prescription.patient_insurance_name || 'Nicht angegeben'}
+              </Typography>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="body2">
+                <strong>Anzahl Einheiten:</strong> {prescription.number_of_sessions}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Frequenz:</strong> {prescription.therapy_frequency_type || 'Nicht angegeben'}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Behandlungsdauer:</strong> {treatment ? `${treatment.duration_minutes} Minuten` : 'Wird geladen...'}
+              </Typography>
+            </Grid>
+          </Grid>
         </Alert>
       )}
 
@@ -290,6 +539,23 @@ function AppointmentSeriesPreview({ prescription, onConfirm, onCancel }) {
       </Button>
 
       {previewAppointments.length > 0 && (
+        <Alert 
+          severity={previewAppointments.some(apt => apt.hasAbsenceConflict) ? "warning" : "info"}
+          sx={{ mb: 2 }}
+        >
+          {previewAppointments.some(apt => apt.hasAbsenceConflict) ? (
+            <>
+              <strong>Abwesenheits-Konflikte gefunden:</strong> 
+              {previewAppointments.filter(apt => apt.hasAbsenceConflict).length} von {previewAppointments.length} Terminen haben Konflikte mit Abwesenheiten.
+              Sie können diese ignorieren oder die Termine verschieben.
+            </>
+          ) : (
+            "Alle Termine sind verfügbar und können erstellt werden."
+          )}
+        </Alert>
+      )}
+
+      {previewAppointments.length > 0 && (
         <>
           <TableContainer component={Paper}>
             <Table>
@@ -299,6 +565,7 @@ function AppointmentSeriesPreview({ prescription, onConfirm, onCancel }) {
                   <TableCell>Uhrzeit</TableCell>
                   <TableCell>Behandler</TableCell>
                   <TableCell>Raum</TableCell>
+                  <TableCell>Status</TableCell>
                   <TableCell>Aktionen</TableCell>
                 </TableRow>
               </TableHead>
@@ -354,9 +621,81 @@ function AppointmentSeriesPreview({ prescription, onConfirm, onCancel }) {
                       </FormControl>
                     </TableCell>
                     <TableCell>
-                      <IconButton onClick={() => handleDeleteAppointment(index)}>
-                        <DeleteIcon />
-                      </IconButton>
+                      {appointment.hasAbsenceConflict ? (
+                        appointment.ignoreAbsenceConflict ? (
+                          <Tooltip title="Abwesenheits-Konflikt wird ignoriert">
+                            <Chip
+                              icon={<BlockIcon />}
+                              label="Ignoriert"
+                              color="warning"
+                              size="small"
+                              clickable
+                              onClick={() => {
+                                // Hier könnte ein Dialog mit Details geöffnet werden
+                                console.log('Ignorierte Abwesenheit:', appointment.absenceConflict);
+                              }}
+                            />
+                          </Tooltip>
+                        ) : (
+                          <Tooltip 
+                            title={
+                              <Box>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                  {getAbsenceTypeDisplay(appointment.absenceConflict?.absence_type)}
+                                  {appointment.absenceConflict?.notes && ` - ${appointment.absenceConflict.notes}`}
+                                </Typography>
+                                <Typography variant="body2">
+                                  <strong>Zeitraum:</strong> {formatDate(appointment.absenceConflict?.start_date)} - {formatDate(appointment.absenceConflict?.end_date)}
+                                </Typography>
+                                {!appointment.absenceConflict?.is_full_day && (
+                                  <Typography variant="body2">
+                                    <strong>Zeit:</strong> {appointment.absenceConflict?.start_time} - {appointment.absenceConflict?.end_time}
+                                  </Typography>
+                                )}
+                                <Typography variant="body2" sx={{ fontStyle: 'italic', mt: 1 }}>
+                                  Klicken zum Bearbeiten
+                                </Typography>
+                              </Box>
+                            }
+                            arrow
+                            placement="top"
+                          >
+                            <Chip
+                              icon={<WarningIcon />}
+                              label="Abwesenheit"
+                              color="error"
+                              size="small"
+                              clickable
+                              onClick={() => handleAbsenceClick(appointment.absenceConflict)}
+                            />
+                          </Tooltip>
+                        )
+                      ) : (
+                        <Chip
+                          icon={<EditIcon />}
+                          label="Verfügbar"
+                          color="success"
+                          size="small"
+                        />
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Box display="flex" gap={1}>
+                        {appointment.hasAbsenceConflict && !appointment.ignoreAbsenceConflict && (
+                          <Tooltip title="Abwesenheits-Konflikt ignorieren">
+                            <IconButton 
+                              onClick={() => handleIgnoreAbsenceConflict(index)}
+                              size="small"
+                              color="warning"
+                            >
+                              <BlockIcon />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        <IconButton onClick={() => handleDeleteAppointment(index)}>
+                          <DeleteIcon />
+                        </IconButton>
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -374,6 +713,153 @@ function AppointmentSeriesPreview({ prescription, onConfirm, onCancel }) {
           </Box>
         </>
       )}
+
+      {/* Dialog für Abwesenheits-Bearbeitung */}
+      <Dialog 
+        open={absenceDialogOpen} 
+        onClose={handleAbsenceDialogClose}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          Abwesenheit bearbeiten
+        </DialogTitle>
+        <DialogContent>
+          {editingAbsence && (
+            <Grid container spacing={3} sx={{ mt: 1 }}>
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Typ</InputLabel>
+                  <Select
+                    value={editingAbsence.absence_type}
+                    onChange={(e) => setEditingAbsence(prev => ({
+                      ...prev,
+                      absence_type: e.target.value
+                    }))}
+                    label="Typ"
+                  >
+                    <MenuItem value="vacation">Urlaub</MenuItem>
+                    <MenuItem value="sick">Krankheit</MenuItem>
+                    <MenuItem value="parental_leave">Elternzeit</MenuItem>
+                    <MenuItem value="special_leave">Sonderurlaub</MenuItem>
+                    <MenuItem value="training">Fortbildung</MenuItem>
+                    <MenuItem value="other">Sonstiges</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={editingAbsence.is_full_day}
+                      onChange={(e) => setEditingAbsence(prev => ({
+                        ...prev,
+                        is_full_day: e.target.checked
+                      }))}
+                    />
+                  }
+                  label="Ganztägig"
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Startdatum"
+                  type="date"
+                  value={editingAbsence.start_date}
+                  onChange={(e) => setEditingAbsence(prev => ({
+                    ...prev,
+                    start_date: e.target.value
+                  }))}
+                  required
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Enddatum"
+                  type="date"
+                  value={editingAbsence.end_date}
+                  onChange={(e) => setEditingAbsence(prev => ({
+                    ...prev,
+                    end_date: e.target.value
+                  }))}
+                  required
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+
+              {!editingAbsence.is_full_day && (
+                <>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Startzeit"
+                      type="time"
+                      value={editingAbsence.start_time}
+                      onChange={(e) => setEditingAbsence(prev => ({
+                        ...prev,
+                        start_time: e.target.value
+                      }))}
+                      required
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Endzeit"
+                      type="time"
+                      value={editingAbsence.end_time}
+                      onChange={(e) => setEditingAbsence(prev => ({
+                        ...prev,
+                        end_time: e.target.value
+                      }))}
+                      required
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </Grid>
+                </>
+              )}
+
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Notizen"
+                  multiline
+                  rows={4}
+                  value={editingAbsence.notes || ''}
+                  onChange={(e) => setEditingAbsence(prev => ({
+                    ...prev,
+                    notes: e.target.value
+                  }))}
+                  placeholder="Optionale Notizen zur Abwesenheit..."
+                />
+              </Grid>
+            </Grid>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={handleAbsenceDelete} 
+            color="error"
+            variant="outlined"
+          >
+            Löschen
+          </Button>
+          <Button onClick={handleAbsenceDialogClose}>
+            Abbrechen
+          </Button>
+          <Button onClick={handleAbsenceEdit} variant="contained">
+            Speichern
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

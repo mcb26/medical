@@ -2,13 +2,27 @@ import React, { useRef, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FullCalendar from '@fullcalendar/react';
 import resourceTimeGridPlugin from '@fullcalendar/resource-timegrid';
-import resourceTimelinePlugin from '@fullcalendar/resource-timeline';
+
 import interactionPlugin from '@fullcalendar/interaction';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import deLocale from '@fullcalendar/core/locales/de';
-import { Menu, MenuItem, ListItemIcon, ListItemText, Box } from '@mui/material';
-import { Receipt, Edit, Delete, Visibility, Event, Block } from '@mui/icons-material';
+import { Menu, MenuItem, ListItemIcon, ListItemText, Box, Divider, Typography, Popover, Button } from '@mui/material';
+import { 
+    Receipt, 
+    Edit, 
+    Delete, 
+    Visibility, 
+    Event, 
+    Block,
+    CheckCircle,
+    Schedule,
+    Cancel,
+    PersonOff,
+    Add as AddIcon
+} from '@mui/icons-material';
+import AppointmentStatusChange from './AppointmentStatusChange';
+import api from '../api/axios';
 
 const plugins = [
     resourceTimeGridPlugin,
@@ -490,6 +504,7 @@ const BaseCalendar = ({
     const [selectedEvent, setSelectedEvent] = useState(null);
     const [dateSelectContextMenu, setDateSelectContextMenu] = useState(null);
     const [selectedDateData, setSelectedDateData] = useState(null);
+    const [statusChangeOpen, setStatusChangeOpen] = useState(false);
 
     useEffect(() => {
         if (calendarRef.current && view) {
@@ -507,22 +522,35 @@ const BaseCalendar = ({
         }
     }, [date]);
 
-    const handleEventClick = (info) => {
-        if (info.jsEvent.detail === 2) {
-            onEventDoubleClick?.(info);
-        } else {
-            onEventClick?.(info);
-        }
-    };
+    // Debug useEffect für State-Änderungen
+    useEffect(() => {
+        console.log('contextMenu changed to:', contextMenu);
+    }, [contextMenu]);
 
-    const handleEventRightClick = (info) => {
+    useEffect(() => {
+        console.log('selectedEvent changed to:', selectedEvent);
+    }, [selectedEvent]);
+
+    const handleEventClick = (info) => {
+        console.log('handleEventClick called:', info);
         if (info.jsEvent) {
             info.jsEvent.preventDefault();
-            setSelectedEvent(info.event);
-            setContextMenu({
+            console.log('Setting context menu at:', info.jsEvent.clientX, info.jsEvent.clientY);
+            console.log('Selected event:', info.event);
+            console.log('Event extendedProps:', info.event.extendedProps);
+            
+            const newContextMenu = {
                 mouseX: info.jsEvent.clientX,
                 mouseY: info.jsEvent.clientY,
-            });
+            };
+            
+            console.log('About to set contextMenu to:', newContextMenu);
+            console.log('About to set selectedEvent to:', info.event);
+            
+            setSelectedEvent(info.event);
+            setContextMenu(newContextMenu);
+            
+            console.log('State setters called');
         }
     };
 
@@ -531,17 +559,37 @@ const BaseCalendar = ({
         setSelectedEvent(null);
     };
 
+    const handleStatusChange = (updatedAppointment) => {
+        // Aktualisiere das Event in der Liste
+        if (selectedEvent && updatedAppointment) {
+            // Trigger ein Re-render des Kalenders
+            if (calendarRef.current) {
+                const calendarApi = calendarRef.current.getApi();
+                calendarApi.refetchEvents();
+            }
+        }
+        setStatusChangeOpen(false);
+        handleContextMenuClose();
+    };
+
+    // Hilfsfunktion für Status-Farben
+    const getStatusColor = (status) => {
+        switch (status) {
+            case 'ready_to_bill': return '#4caf50';
+            case 'completed': return '#1976d2';
+            case 'cancelled': return '#f44336';
+            case 'no_show': return '#d32f2f';
+            case 'billed': return '#9c27b0';
+            default: return '#ff9800';
+        }
+    };
+
     const handleDateSelectContextMenuClose = () => {
         setDateSelectContextMenu(null);
         setSelectedDateData(null);
     };
 
-    const handleMarkReadyToBill = () => {
-        if (selectedEvent && onEventMarkReadyToBill) {
-            onEventMarkReadyToBill(selectedEvent);
-        }
-        handleContextMenuClose();
-    };
+
 
     const handleEditEvent = () => {
         if (selectedEvent && onEventClick) {
@@ -617,6 +665,119 @@ const BaseCalendar = ({
         handleDateSelectContextMenuClose();
     };
 
+    // Handler für Rechnungserstellung
+    const handleCreateInvoice = async () => {
+        if (!selectedEvent) {
+            console.error('selectedEvent ist null');
+            return;
+        }
+
+        const appointmentId = selectedEvent.extendedProps?.id || selectedEvent.id;
+        
+        if (!appointmentId) {
+            console.error('Keine Appointment-ID gefunden:', selectedEvent);
+            return;
+        }
+
+        try {
+            // Erstelle Zuzahlungsrechnung für diesen Termin
+            const response = await api.post('/copay-invoices/create-for-appointment/', {
+                appointment_id: appointmentId,
+                due_date_days: 30
+            });
+
+            if (response.data.total_invoices_created > 0) {
+                alert(`Rechnung erfolgreich erstellt! ${response.data.total_invoices_created} Rechnung(en) erstellt.`);
+            } else {
+                alert('Keine Rechnung erstellt. Möglicherweise gibt es keine ausstehenden Zuzahlungen für diesen Termin.');
+            }
+
+            handleContextMenuClose();
+        } catch (error) {
+            console.error('Fehler beim Erstellen der Rechnung:', error);
+            alert('Fehler beim Erstellen der Rechnung: ' + (error.response?.data?.error || error.message));
+        }
+    };
+
+    // Handler für direkte Status-Änderung
+    const handleDirectStatusChange = async (newStatus) => {
+        if (!selectedEvent) {
+            console.error('selectedEvent ist null');
+            return;
+        }
+
+        console.log('handleDirectStatusChange called with:', newStatus);
+        console.log('selectedEvent:', selectedEvent);
+        console.log('selectedEvent.extendedProps:', selectedEvent.extendedProps);
+        console.log('selectedEvent.id:', selectedEvent.id);
+        console.log('selectedEvent.extendedProps.id:', selectedEvent.extendedProps?.id);
+
+        // Versuche verschiedene Wege, die ID zu finden
+        const appointmentId = selectedEvent.extendedProps?.id || selectedEvent.id || selectedEvent.extendedProps?.appointment_id || selectedEvent.extendedProps?.appointment_id;
+        
+        if (!appointmentId) {
+            console.error('Keine Appointment-ID gefunden:', selectedEvent);
+            return;
+        }
+
+        console.log('Using appointment ID:', appointmentId);
+
+        try {
+            await api.patch(`/appointments/${appointmentId}/`, {
+                status: newStatus
+            });
+
+            // Aktualisiere das Event visuell
+            if (calendarRef.current) {
+                const calendarApi = calendarRef.current.getApi();
+                calendarApi.refetchEvents();
+            }
+
+            handleContextMenuClose();
+        } catch (error) {
+            console.error('Fehler beim Ändern des Status:', error);
+            // Hier könnte man eine Toast-Nachricht anzeigen
+        }
+    };
+
+    // Status-Definitionen für das Kontext-Menü
+    const getStatusOptions = (currentStatus) => {
+        const statusTransitions = {
+            planned: ['completed', 'cancelled', 'no_show'],
+            completed: ['ready_to_bill', 'cancelled'],
+            ready_to_bill: ['billed', 'completed'],
+            billed: ['ready_to_bill'],
+            cancelled: ['planned'],
+            no_show: ['planned', 'cancelled']
+        };
+
+        const statusIcons = {
+            planned: Schedule,
+            completed: CheckCircle,
+            ready_to_bill: Receipt,
+            billed: Receipt,
+            cancelled: Cancel,
+            no_show: PersonOff
+        };
+
+        const statusLabels = {
+            planned: 'Geplant',
+            completed: 'Abgeschlossen',
+            ready_to_bill: 'Abrechnungsbereit',
+            billed: 'Abgerechnet',
+            cancelled: 'Storniert',
+            no_show: 'Nicht erschienen'
+        };
+
+        const availableTransitions = statusTransitions[currentStatus] || [];
+        
+        return availableTransitions.map(status => ({
+            status,
+            icon: statusIcons[status],
+            label: statusLabels[status]
+        }));
+    };
+
     // Bestimme die Öffnungszeiten für den aktuellen Tag
     const currentDate = date || new Date();
     const workingHours = getWorkingHoursForDay(openingHours, currentDate);
@@ -635,12 +796,7 @@ const BaseCalendar = ({
         ...breakEvents
     ];
 
-    // Prüfe, ob der Termin als abrechnungsbereit markiert werden kann
-    const canMarkReadyToBill = (event) => {
-        if (!event) return false;
-        const status = event.extendedProps.status;
-        return status === 'completed';
-    };
+
 
     return (
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -661,7 +817,7 @@ const BaseCalendar = ({
                 weekends={weekends !== undefined ? weekends : true}
                 events={allEvents}
                 resources={resources}
-                eventClick={handleEventClick}
+                eventClick={null}
                 eventDrop={onEventDrop}
                 eventResize={onEventResize}
                 select={handleDateSelect}
@@ -697,18 +853,45 @@ const BaseCalendar = ({
                 slotLabelInterval="00:15"
                 nowIndicator={true}
                 eventDidMount={(info) => {
-                    // Füge Rechtsklick-Event hinzu
+                    // Füge Linksklick-Event hinzu (für Touchscreen-Kompatibilität)
                     const element = info.el;
-                    element.addEventListener('contextmenu', (e) => {
-                        e.preventDefault();
-                        handleEventRightClick(info);
-                    });
+                    
+                    // Entferne alte Event-Listener falls vorhanden
+                    element.removeEventListener('click', element._clickHandler);
+                    
+                    // Erstelle neuen Event-Handler
+                    element._clickHandler = (e) => {
+                        console.log('Event clicked:', e.detail, info.event.title);
+                        
+                        // Einzelklick für Kontext-Menü
+                        if (e.detail === 1) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            
+                            // Direkt State setzen ohne handleEventClick
+                            console.log('Setting state directly...');
+                            setSelectedEvent(info.event);
+                            setContextMenu({
+                                mouseX: e.clientX,
+                                mouseY: e.clientY,
+                            });
+                            console.log('State set directly');
+                        }
+                        // Doppelklick für Details
+                        if (e.detail === 2) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onEventDoubleClick?.(info);
+                        }
+                    };
+                    
+                    element.addEventListener('click', element._clickHandler);
                 }}
             />
             </Box>
             
             {/* Kontextmenü für Events */}
-            <Menu
+            <Popover
                 open={contextMenu !== null}
                 onClose={handleContextMenuClose}
                 anchorReference="anchorPosition"
@@ -717,34 +900,71 @@ const BaseCalendar = ({
                         ? { top: contextMenu.mouseY, left: contextMenu.mouseX }
                         : undefined
                 }
+                style={{ zIndex: 9999 }}
             >
-                <MenuItem onClick={handleViewEvent}>
-                    <ListItemIcon>
-                        <Visibility fontSize="small" />
-                    </ListItemIcon>
-                    <ListItemText>Details anzeigen</ListItemText>
-                </MenuItem>
-                <MenuItem onClick={handleEditEvent}>
-                    <ListItemIcon>
-                        <Edit fontSize="small" />
-                    </ListItemIcon>
-                    <ListItemText>Bearbeiten</ListItemText>
-                </MenuItem>
-                {canMarkReadyToBill(selectedEvent) && (
-                    <MenuItem onClick={handleMarkReadyToBill}>
-                        <ListItemIcon>
-                            <Receipt fontSize="small" />
-                        </ListItemIcon>
-                        <ListItemText>Abrechnungsbereit</ListItemText>
-                    </MenuItem>
-                )}
-                <MenuItem onClick={handleDeleteEvent}>
-                    <ListItemIcon>
-                        <Delete fontSize="small" />
-                    </ListItemIcon>
-                    <ListItemText>Löschen</ListItemText>
-                </MenuItem>
-            </Menu>
+                <Box sx={{ p: 1, minWidth: 200 }}>
+                    <Button
+                        fullWidth
+                        startIcon={<Visibility />}
+                        onClick={handleViewEvent}
+                        sx={{ justifyContent: 'flex-start', mb: 1 }}
+                    >
+                        Details anzeigen
+                    </Button>
+                    
+                    <Button
+                        fullWidth
+                        startIcon={<Edit />}
+                        onClick={handleEditEvent}
+                        sx={{ justifyContent: 'flex-start', mb: 1 }}
+                    >
+                        Bearbeiten
+                    </Button>
+                    
+                    <Button
+                        fullWidth
+                        startIcon={<Receipt />}
+                        onClick={handleCreateInvoice}
+                        sx={{ justifyContent: 'flex-start', mb: 1 }}
+                        color="primary"
+                    >
+                        Rechnung erstellen
+                    </Button>
+                    
+                    <Divider sx={{ my: 1 }} />
+                    
+                    <Typography variant="caption" color="text.secondary" sx={{ px: 1, py: 0.5, display: 'block' }}>
+                        Status ändern (aktuell: {selectedEvent?.extendedProps?.status || 'Geplant'})
+                    </Typography>
+                    
+                    {getStatusOptions(selectedEvent?.extendedProps?.status || 'planned').map((option) => {
+                        const IconComponent = option.icon;
+                        return (
+                            <Button
+                                key={option.status}
+                                fullWidth
+                                startIcon={<IconComponent />}
+                                onClick={() => handleDirectStatusChange(option.status)}
+                                sx={{ justifyContent: 'flex-start', mb: 0.5 }}
+                            >
+                                {option.label}
+                            </Button>
+                        );
+                    })}
+                    
+                    <Divider sx={{ my: 1 }} />
+                    
+                    <Button
+                        fullWidth
+                        startIcon={<Delete />}
+                        onClick={handleDeleteEvent}
+                        sx={{ justifyContent: 'flex-start' }}
+                        color="error"
+                    >
+                        Löschen
+                    </Button>
+                </Box>
+            </Popover>
 
             {/* Kontextmenü für Datums-/Zeitauswahl */}
             <Menu
@@ -770,6 +990,15 @@ const BaseCalendar = ({
                     <ListItemText>Abwesenheit/Blockzeit erstellen</ListItemText>
                 </MenuItem>
             </Menu>
+            
+            {/* Status Change Dialog */}
+            <AppointmentStatusChange
+                appointment={selectedEvent?.extendedProps}
+                open={statusChangeOpen}
+                onClose={() => setStatusChangeOpen(false)}
+                onStatusChange={handleStatusChange}
+                variant="dialog"
+            />
         </Box>
     );
 };

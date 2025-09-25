@@ -3,15 +3,14 @@ import { useNavigate, useParams } from 'react-router-dom';
 import api from '../api/axios';
 import { isAuthenticated, getUserProfile } from '../services/auth';
 import { usePatientPermissions } from '../hooks/usePermissions';
+import PatientInsuranceManagement from './PatientInsuranceManagement';
 import {
   Box,
-  Container,
   Grid,
   Paper,
   Typography,
   Chip,
   Avatar,
-  Divider,
   CircularProgress,
   Alert,
   Tabs,
@@ -38,8 +37,6 @@ import {
   CalendarToday,
   MedicalServices,
   LocalHospital,
-  Assignment,
-  Warning,
   Event,
   AccessTime,
   Edit,
@@ -94,6 +91,10 @@ function PatientDetail() {
     treatments: true,
     prescriptions: true
   });
+
+  const handleInsuranceUpdate = () => {
+    fetchData(); // Aktualisiere Patientendaten nach Versicherungsänderungen
+  };
 
   const fetchData = async () => {
     try {
@@ -254,18 +255,36 @@ function PatientDetail() {
                   <Typography variant="h4" gutterBottom>
                     {`${patient.first_name} ${patient.last_name}`}
                   </Typography>
-                  <Box display="flex" gap={1}>
+                  <Box display="flex" gap={1} flexWrap="wrap">
                     <Chip
                       icon={<CalendarToday />}
                       label={`Geb. ${new Date(patient.dob).toLocaleDateString('de-DE')}`}
                       variant="outlined"
                     />
-                    <Chip
-                      icon={<LocalHospital />}
-                      label={patient.insurance_provider || 'Keine Versicherung'}
-                      color="primary"
-                      variant="outlined"
-                    />
+                    {patient.insurances && patient.insurances.length > 0 ? (
+                      patient.insurances
+                        .filter(insurance => {
+                          const isValid = new Date() >= new Date(insurance.valid_from) && 
+                                        new Date() <= new Date(insurance.valid_to);
+                          return isValid;
+                        })
+                        .map((insurance, index) => (
+                          <Chip
+                            key={insurance.id}
+                            icon={<LocalHospital />}
+                            label={`${insurance.insurance_provider?.name || 'Unbekannt'} (${insurance.is_private ? 'Privat' : 'GKV'})`}
+                            color={insurance.is_private ? 'secondary' : 'primary'}
+                            variant="outlined"
+                          />
+                        ))
+                    ) : (
+                      <Chip
+                        icon={<LocalHospital />}
+                        label="Keine Versicherung"
+                        color="default"
+                        variant="outlined"
+                      />
+                    )}
                   </Box>
                 </Grid>
                 <Grid item>
@@ -354,6 +373,7 @@ function PatientDetail() {
                 sx={{ borderBottom: 1, borderColor: 'divider' }}
               >
                 <Tab label="Übersicht" />
+                <Tab label="Versicherungen" />
                 <Tab label="Termine" />
                 <Tab label="Verordnungen" />
                 <Tab label="Dokumente" />
@@ -510,8 +530,16 @@ function PatientDetail() {
                 </Grid>
               </TabPanel>
 
-              {/* Other Tab Panels remain the same */}
+              {/* Versicherungen Tab */}
               <TabPanel value={tabValue} index={1}>
+                <PatientInsuranceManagement 
+                  patientId={patient.id} 
+                  onInsuranceUpdate={handleInsuranceUpdate}
+                />
+              </TabPanel>
+
+              {/* Termine Tab */}
+              <TabPanel value={tabValue} index={2}>
                 <Box sx={{ overflowX: 'auto' }}>
                   <Table>
                     <TableHead>
@@ -544,7 +572,8 @@ function PatientDetail() {
                 </Box>
               </TabPanel>
 
-              <TabPanel value={tabValue} index={2}>
+              {/* Verordnungen Tab */}
+              <TabPanel value={tabValue} index={3}>
                 <Box sx={{ overflowX: 'auto' }}>
                   <Table>
                     <TableHead>
@@ -575,6 +604,13 @@ function PatientDetail() {
                     </TableBody>
                   </Table>
                 </Box>
+              </TabPanel>
+
+              {/* Dokumente Tab */}
+              <TabPanel value={tabValue} index={4}>
+                <Alert severity="info">
+                  Dokumente-Funktion wird noch implementiert.
+                </Alert>
               </TabPanel>
             </Paper>
           </Box>

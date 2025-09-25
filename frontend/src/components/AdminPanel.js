@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
-  Paper,
   Table,
   TableBody,
   TableCell,
@@ -29,36 +28,22 @@ import {
   Switch,
   FormControlLabel,
   TextField,
-  Divider,
   Tooltip,
-  Badge,
   Avatar,
   List,
   ListItem,
   ListItemText,
   ListItemIcon,
   ListItemSecondaryAction,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   Checkbox,
-  FormGroup,
-  Radio,
-  RadioGroup,
-  Slider,
-  Typography as MuiTypography,
   AlertTitle,
-  Snackbar,
-  LinearProgress,
   CircularProgress,
-  Fab,
   SpeedDial,
   SpeedDialAction,
   SpeedDialIcon,
 } from '@mui/material';
 import {
   Edit as EditIcon,
-  Delete as DeleteIcon,
   Add as AddIcon,
   Security as SecurityIcon,
   Person as PersonIcon,
@@ -66,34 +51,16 @@ import {
   AdminPanelSettings as AdminIcon,
   CheckCircle as CheckIcon,
   Cancel as CancelIcon,
-  Warning as WarningIcon,
   Info as InfoIcon,
-  ExpandMore as ExpandMoreIcon,
   Save as SaveIcon,
   Refresh as RefreshIcon,
-  Download as DownloadIcon,
-  Upload as UploadIcon,
   Settings as SettingsIcon,
-  Lock as LockIcon,
   Visibility as VisibilityIcon,
   VisibilityOff as VisibilityOffIcon,
   Star as StarIcon,
   StarBorder as StarBorderIcon,
-  FilterList as FilterIcon,
-  Sort as SortIcon,
   Search as SearchIcon,
-  Clear as ClearIcon,
-  MoreVert as MoreIcon,
-  KeyboardArrowDown as ArrowDownIcon,
-  KeyboardArrowUp as ArrowUpIcon,
-  TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
-  Equalizer as EqualizerIcon,
   Assessment as AssessmentIcon,
-  Timeline as TimelineIcon,
-  PieChart as PieChartIcon,
-  BarChart as BarChartIcon,
-  ShowChart as ShowChartIcon,
   CalendarToday,
   People,
   Assignment,
@@ -120,13 +87,24 @@ const MODULE_ICONS = {
   users: AdminIcon,
 };
 
-// Berechtigungslevel mit Farben
+// Deutsche Modul-Namen
+const MODULE_NAMES = {
+  appointments: 'Termine',
+  patients: 'Patienten',
+  prescriptions: 'Verordnungen',
+  treatments: 'Behandlungen',
+  reports: 'Berichte',
+  finance: 'Finanzen',
+  billing: 'Abrechnung',
+  settings: 'Einstellungen',
+  users: 'Benutzer',
+};
+
+// Berechtigungslevel mit Farben (logische Hierarchie)
 const PERMISSION_LEVELS = {
   none: { label: 'Kein Zugriff', color: 'error', icon: CancelIcon },
   read: { label: 'Nur Lesen', color: 'info', icon: InfoIcon },
-  create: { label: 'Erstellen', color: 'warning', icon: AddIcon },
-  update: { label: 'Bearbeiten', color: 'primary', icon: EditIcon },
-  delete: { label: 'Löschen', color: 'secondary', icon: DeleteIcon },
+  write: { label: 'Lesen & Schreiben', color: 'warning', icon: EditIcon },
   full: { label: 'Voller Zugriff', color: 'success', icon: CheckIcon },
 };
 
@@ -144,8 +122,7 @@ function AdminPanel() {
   const [bulkPermissions, setBulkPermissions] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [sortBy, setSortBy] = useState('name');
-  const [sortOrder, setSortOrder] = useState('asc');
+  const [editingPermissions, setEditingPermissions] = useState({});
 
   // Lade Benutzer und Rollen
   useEffect(() => {
@@ -192,36 +169,10 @@ function AdminPanel() {
       return matchesSearch && matchesStatus;
     })
     .sort((a, b) => {
-      let aValue, bValue;
-      
-      switch (sortBy) {
-        case 'name':
-          aValue = `${a.first_name} ${a.last_name}`.toLowerCase();
-          bValue = `${b.first_name} ${b.last_name}`.toLowerCase();
-          break;
-        case 'email':
-          aValue = a.email?.toLowerCase();
-          bValue = b.email?.toLowerCase();
-          break;
-
-        case 'status':
-          aValue = a.is_active ? 1 : 0;
-          bValue = b.is_active ? 1 : 0;
-          break;
-        case 'admin':
-          aValue = a.is_admin ? 1 : 0;
-          bValue = b.is_admin ? 1 : 0;
-          break;
-        default:
-          aValue = a[sortBy];
-          bValue = b[sortBy];
-      }
-      
-      if (sortOrder === 'asc') {
-        return aValue > bValue ? 1 : -1;
-      } else {
-        return aValue < bValue ? 1 : -1;
-      }
+      // Sortiere nach Namen (Standard)
+      const aValue = `${a.first_name} ${a.last_name}`.toLowerCase();
+      const bValue = `${b.first_name} ${b.last_name}`.toLowerCase();
+      return aValue.localeCompare(bValue);
     });
 
   // Bulk-Berechtigungen bearbeiten
@@ -310,6 +261,36 @@ function AdminPanel() {
       setSelectedUsers(prev => [...prev, userId]);
     } else {
       setSelectedUsers(prev => prev.filter(id => id !== userId));
+    }
+  };
+
+  // Berechtigung ändern
+  const handlePermissionChange = (module, newPermission) => {
+    setEditingPermissions(prev => ({
+      ...prev,
+      [module]: newPermission
+    }));
+  };
+
+  // Benutzer speichern
+  const handleSaveUser = async () => {
+    try {
+      // Berechtigungen aktualisieren
+      const permissions = {};
+      Object.keys(editingPermissions).forEach(module => {
+        permissions[module] = {
+          permission: editingPermissions[module]
+        };
+      });
+
+      await api.post(`/users/${selectedUser.id}/bulk_update_permissions/`, {
+        permissions
+      });
+
+      setUserDialog(false);
+      loadData(); // Daten neu laden
+    } catch (error) {
+      console.error('Fehler beim Speichern der Berechtigungen:', error);
     }
   };
 
@@ -985,7 +966,7 @@ function AdminPanel() {
               
               <Grid container spacing={2}>
                 {Object.entries(MODULE_ICONS).map(([module, iconName]) => {
-                  const currentPermission = selectedUser?.effective_permissions?.[module]?.permission || 'none';
+                  const currentPermission = editingPermissions[module] || 'none';
                   const config = PERMISSION_LEVELS[currentPermission];
                   
                   return (
@@ -995,7 +976,7 @@ function AdminPanel() {
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
                             <config.icon color="primary" />
                             <Typography variant="subtitle2">
-                              {module.charAt(0).toUpperCase() + module.slice(1)}
+                              {MODULE_NAMES[module] || module}
                             </Typography>
                           </Box>
                           
@@ -1004,6 +985,7 @@ function AdminPanel() {
                             <Select
                               value={currentPermission}
                               label="Berechtigung"
+                              onChange={(e) => handlePermissionChange(module, e.target.value)}
                             >
                               {Object.entries(PERMISSION_LEVELS).map(([level, config]) => (
                                 <MenuItem key={level} value={level}>
@@ -1034,7 +1016,7 @@ function AdminPanel() {
           <Button onClick={() => setUserDialog(false)}>
             Abbrechen
           </Button>
-          <Button variant="contained">
+          <Button variant="contained" onClick={handleSaveUser}>
             Speichern
           </Button>
         </DialogActions>

@@ -31,8 +31,8 @@ function ICDCodeEdit() {
     const fetchData = async () => {
       try {
         const [icdResponse, parentsResponse] = await Promise.all([
-          api.get(`/icdcodes/${id}/`),
-          api.get('/icdcodes/')
+          api.get(`/icd-codes/${id}/`),
+          api.get('/icd-codes/')
         ]);
         
         setFormData(icdResponse.data);
@@ -51,8 +51,8 @@ function ICDCodeEdit() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await api.put(`/icdcodes/${id}/`, formData);
-      navigate(`/icdcodes/${id}`);
+      await api.put(`/icd-codes/${id}/`, formData);
+              navigate(`/icd-codes/${id}`);
     } catch (error) {
       setError('Fehler beim Aktualisieren des ICD-Codes');
     }

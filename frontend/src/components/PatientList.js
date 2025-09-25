@@ -1,164 +1,179 @@
-import React, { useState, useEffect } from 'react';
-import { DataGrid, GridToolbar } from '@mui/x-data-grid';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
-  Paper,
   Typography,
   Chip,
   IconButton,
   Tooltip,
-  Container,
-  Stack,
   Avatar,
   useTheme,
-  useMediaQuery
+  useMediaQuery,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
+  Divider
 } from '@mui/material';
-import { useToast } from './common/ToastNotifications';
-import { LoadingOverlay } from './common/ProgressBar';
-import { ListSkeleton } from './common/SkeletonLoader';
-import { Breadcrumbs } from './common/Breadcrumbs';
+import { useToastActions } from './common/ToastNotifications';
 import {
-  Add as AddIcon,
-  Refresh as RefreshIcon,
   Person as PersonIcon,
   LocalHospital,
-  Event,
   Email,
   Phone,
   Home as HomeIcon,
   CalendarToday as CalendarIcon,
-  Search as SearchIcon,
-  FilterList as FilterIcon
+  Visibility as ViewIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
+import { isAuthenticated } from '../services/auth';
+import UnifiedPageLayout from './common/UnifiedPageLayout';
 import ModernButton from './common/ModernButton';
-import ModernCard, { CardSection, CardGrid } from './common/ModernCard';
+import { Add as AddIcon } from '@mui/icons-material';
 
 function PatientList() {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [rowCount, setRowCount] = useState(0);
-  const [selectedPatients, setSelectedPatients] = useState([]);
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [selectedPatient, setSelectedPatient] = useState(null);
   const navigate = useNavigate();
-  const toast = useToast();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const { showError } = useToastActions();
 
-  const fetchPatients = async () => {
+  const fetchPatients = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await api.get('patients/');
+      const response = await api.get('/patients/');
       const formattedPatients = response.data.map(patient => ({
         ...patient,
-        id: patient.id,
         fullName: `${patient.first_name} ${patient.last_name}`,
-        formattedBirthDate: patient.dob ? 
-          format(new Date(patient.dob), 'dd.MM.yyyy', { locale: de }) : '-',
-        formattedCreatedAt: patient.created_at ? 
-          format(new Date(patient.created_at), 'dd.MM.yyyy HH:mm', { locale: de }) : '-',
-        formattedUpdatedAt: patient.updated_at ? 
-          format(new Date(patient.updated_at), 'dd.MM.yyyy HH:mm', { locale: de }) : '-',
-        insuranceTypeDisplay: patient.insurance_type === 'public' ? 'Gesetzlich' : 'Privat',
-        fullAddress: `${patient.street_address || ''}, ${patient.postal_code || ''} ${patient.city || ''}`
+        age: patient.date_of_birth ? 
+          Math.floor((new Date() - new Date(patient.date_of_birth)) / (365.25 * 24 * 60 * 60 * 1000)) : 
+          null,
+        formattedDateOfBirth: patient.date_of_birth ? 
+          format(new Date(patient.date_of_birth), 'dd.MM.yyyy', { locale: de }) : 
+          '-',
+        insuranceDisplay: patient.insurance_provider_name || 'Keine Versicherung',
+        statusDisplay: patient.status || 'Aktiv'
       }));
       setPatients(formattedPatients);
-      setRowCount(formattedPatients.length);
-      toast.success(`${formattedPatients.length} Patienten erfolgreich geladen`);
+      setLoading(false);
     } catch (error) {
       console.error('Fehler beim Laden der Patienten:', error);
-      toast.error('Fehler beim Laden der Patienten');
-    } finally {
+      showError('Fehler beim Laden der Patienten');
       setLoading(false);
+    }
+  }, [showError]);
+
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      navigate('/login');
+      return;
+    }
+    fetchPatients();
+  }, [navigate, fetchPatients]);
+
+  const handleRowClick = (params) => {
+    if (isMobile) {
+      setSelectedPatient(params.row);
+      setMobileDetailOpen(true);
+    } else {
+      navigate(`/patients/${params.row.id}`);
     }
   };
 
-  useEffect(() => {
-    fetchPatients();
-  }, []);
+  const handleMobileDetailClose = () => {
+    setMobileDetailOpen(false);
+    setSelectedPatient(null);
+  };
 
-  const handleRowClick = (params) => {
-    navigate(`/patients/${params.row.id}`);
+  const handleMobileDetailView = () => {
+    if (selectedPatient) {
+      navigate(`/patients/${selectedPatient.id}`);
+    }
   };
 
   const columns = [
     {
+      field: 'id',
+      headerName: 'ID',
+      width: 80,
+      sortable: true,
+    },
+    {
       field: 'fullName',
-      headerName: 'Patientenname',
-      width: 220,
+      headerName: 'Name',
+      width: 200,
+      sortable: true,
       renderCell: (params) => (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32 }}>
+          <Avatar sx={{ width: 32, height: 32, bgcolor: theme.palette.primary.main }}>
             <PersonIcon />
           </Avatar>
-          <Typography variant="body1">{params.value}</Typography>
-        </Box>
-      ),
-    },
-    {
-      field: 'formattedBirthDate',
-      headerName: 'Geburtsdatum',
-      width: 130,
-      renderCell: (params) => (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <CalendarIcon color="action" />
-          <Typography>{params.value}</Typography>
-        </Box>
-      ),
-    },
-    {
-      field: 'email',
-      headerName: 'E-Mail',
-      width: 220,
-      renderCell: (params) => (
-        <Tooltip title={`E-Mail an ${params.row.fullName} senden`}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Email color="action" />
-            <Typography>{params.value || '-'}</Typography>
+          <Box>
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              {params.value}
+            </Typography>
+            {params.row.age && (
+              <Typography variant="caption" color="text.secondary">
+                {params.row.age} Jahre
+              </Typography>
+            )}
           </Box>
-        </Tooltip>
+        </Box>
+      ),
+    },
+    {
+      field: 'formattedDateOfBirth',
+      headerName: 'Geburtsdatum',
+      width: 120,
+      sortable: true,
+    },
+    {
+      field: 'insuranceDisplay',
+      headerName: 'Versicherung',
+      width: 180,
+      sortable: true,
+      renderCell: (params) => (
+        <Chip
+          label={params.value}
+          size="small"
+          variant="outlined"
+          color={params.value === 'Keine Versicherung' ? 'error' : 'primary'}
+        />
       ),
     },
     {
       field: 'phone_number',
       headerName: 'Telefon',
-      width: 160,
-      renderCell: (params) => (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Phone color="action" />
-          <Typography>{params.value || '-'}</Typography>
-        </Box>
-      ),
+      width: 140,
+      sortable: true,
     },
     {
-      field: 'fullAddress',
-      headerName: 'Adresse',
-      width: 280,
-      renderCell: (params) => (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <HomeIcon color="action" />
-          <Typography>{params.value || '-'}</Typography>
-        </Box>
-      ),
+      field: 'email',
+      headerName: 'E-Mail',
+      width: 200,
+      sortable: true,
     },
     {
-      field: 'insuranceTypeDisplay',
-      headerName: 'Versicherung',
-      width: 150,
+      field: 'statusDisplay',
+      headerName: 'Status',
+      width: 120,
+      sortable: true,
       renderCell: (params) => (
         <Chip
-          icon={<LocalHospital />}
           label={params.value}
-          color={params.row.insurance_type === 'public' ? 'primary' : 'secondary'}
-          variant="outlined"
           size="small"
+          color={params.value === 'Aktiv' ? 'success' : 'default'}
         />
       ),
-    },
-    {
-      field: 'insurance_number',
-      headerName: 'Versicherten-Nr.',
-      width: 160,
     },
     {
       field: 'actions',
@@ -166,275 +181,148 @@ function PatientList() {
       width: 120,
       sortable: false,
       renderCell: (params) => (
-        <Stack direction="row" spacing={1}>
-          <Tooltip title="Termin vereinbaren">
+        <Box>
+          <Tooltip title="Details anzeigen">
             <IconButton
               size="small"
               onClick={(e) => {
                 e.stopPropagation();
-                navigate(`/appointments/new?patient=${params.row.id}`);
+                navigate(`/patients/${params.row.id}`);
               }}
-              color="primary"
             >
-              <Event />
+              <ViewIcon />
             </IconButton>
           </Tooltip>
-        </Stack>
+        </Box>
       ),
     }
   ];
 
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const actions = [
+    {
+      label: 'Neuer Patient',
+      variant: 'contained',
+      icon: <AddIcon />,
+      onClick: () => navigate('/patients/new'),
+    },
+  ];
 
   return (
-    <Box sx={{ 
-      p: { xs: 2, sm: 3 }, 
-      minHeight: '100vh',
-      backgroundColor: theme.palette.background.default,
-    }}>
-      <Breadcrumbs />
-      <Container maxWidth="xl">
-        {/* Header Section */}
-        <Box sx={{ 
-          mb: 4, 
-          display: 'flex', 
-          flexDirection: { xs: 'column', sm: 'row' },
-          justifyContent: 'space-between', 
-          alignItems: { xs: 'stretch', sm: 'center' },
-          gap: 2
-        }}>
-          <Box>
-            <Typography 
-              variant="h4" 
-              component="h1" 
-              sx={{ 
-                fontWeight: 700,
-                color: theme.palette.text.primary,
-                mb: 0.5
-              }}
-            >
-              Patienten
-            </Typography>
-            <Typography 
-              variant="body2" 
-              sx={{ 
-                color: theme.palette.text.secondary,
-                fontSize: '0.875rem'
-              }}
-            >
-              {rowCount} Patienten insgesamt • Verwalten Sie Ihre Patientendaten
-            </Typography>
+    <UnifiedPageLayout
+      title="Patienten"
+      subtitle="Verwalten Sie Ihre Patienten und deren Daten"
+      actions={actions}
+      onRefresh={fetchPatients}
+      showDataGrid={true}
+      dataGridProps={{
+        rows: patients,
+        columns: columns,
+        loading: loading,
+        rowCount: patients.length,
+        onRowClick: handleRowClick,
+      }}
+    >
+      {/* Mobile Patient Detail Dialog */}
+      <Dialog
+        open={mobileDetailOpen}
+        onClose={handleMobileDetailClose}
+        fullScreen={isMobile}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Avatar sx={{ bgcolor: theme.palette.primary.main }}>
+              <PersonIcon />
+            </Avatar>
+            <Box>
+              <Typography variant="h6">
+                {selectedPatient?.fullName}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Patient #{selectedPatient?.id}
+              </Typography>
+            </Box>
           </Box>
-          
-          <Box sx={{ 
-            display: 'flex', 
-            gap: 2,
-            flexDirection: { xs: 'column', sm: 'row' }
-          }}>
-            <ModernButton
-              variant="outlined"
-              startIcon={<RefreshIcon />}
-              onClick={fetchPatients}
-              size="medium"
-            >
-              Aktualisieren
-            </ModernButton>
-            <ModernButton
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => navigate('/patients/new')}
-              size="medium"
-            >
-              Neuer Patient
-            </ModernButton>
-          </Box>
-        </Box>
-
-        {/* Statistics Cards */}
-        <CardSection title="Übersicht">
-          <CardGrid columns={{ xs: 1, sm: 2, md: 4 }} spacing={3}>
-            <ModernCard
-              variant="info"
-              title="Gesamt"
-              sx={{ textAlign: 'center' }}
-            >
-              <Typography variant="h3" sx={{ fontWeight: 700, color: theme.palette.info.main }}>
-                {patients.length}
-              </Typography>
-              <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
-                Patienten insgesamt
-              </Typography>
-            </ModernCard>
-            
-            <ModernCard
-              variant="success"
-              title="Gesetzlich"
-              sx={{ textAlign: 'center' }}
-            >
-              <Typography variant="h3" sx={{ fontWeight: 700, color: theme.palette.success.main }}>
-                {patients.filter(p => p.insurance_type === 'public').length}
-              </Typography>
-              <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
-                Gesetzlich versichert
-              </Typography>
-            </ModernCard>
-            
-            <ModernCard
-              variant="warning"
-              title="Privat"
-              sx={{ textAlign: 'center' }}
-            >
-              <Typography variant="h3" sx={{ fontWeight: 700, color: theme.palette.warning.main }}>
-                {patients.filter(p => p.insurance_type === 'private').length}
-              </Typography>
-              <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
-                Privat versichert
-              </Typography>
-            </ModernCard>
-            
-            <ModernCard
-              variant="primary"
-              title="Neu heute"
-              sx={{ textAlign: 'center' }}
-            >
-              <Typography variant="h3" sx={{ fontWeight: 700, color: theme.palette.primary.main }}>
-                {patients.filter(p => {
-                  const today = new Date().toDateString();
-                  const createdDate = new Date(p.created_at).toDateString();
-                  return createdDate === today;
-                }).length}
-              </Typography>
-              <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
-                Heute hinzugefügt
-              </Typography>
-            </ModernCard>
-          </CardGrid>
-        </CardSection>
-
-        {/* Data Grid */}
-        <LoadingOverlay open={loading} message="Lade Patienten...">
-          <ModernCard
-            variant="elevated"
-            title="Patientenliste"
-            subtitle={`${rowCount} Patienten gefunden`}
-            action={
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Tooltip title="Aktualisieren">
-                  <IconButton
-                    onClick={fetchPatients}
-                    disabled={loading}
-                    sx={{ color: 'primary.main' }}
-                  >
-                    <RefreshIcon />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Neuen Patienten hinzufügen">
-                  <IconButton
-                    onClick={() => navigate('/patients/new')}
-                    sx={{ color: 'primary.main' }}
-                  >
-                    <AddIcon />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-            }
-            sx={{ mt: 3 }}
+        </DialogTitle>
+        <DialogContent>
+          {selectedPatient && (
+            <List>
+              <ListItem>
+                <ListItemAvatar>
+                  <Avatar sx={{ bgcolor: theme.palette.info.main }}>
+                    <CalendarIcon />
+                  </Avatar>
+                </ListItemAvatar>
+                <ListItemText
+                  primary="Geburtsdatum"
+                  secondary={selectedPatient.formattedDateOfBirth}
+                />
+              </ListItem>
+              <Divider />
+              <ListItem>
+                <ListItemAvatar>
+                  <Avatar sx={{ bgcolor: theme.palette.success.main }}>
+                    <LocalHospital />
+                  </Avatar>
+                </ListItemAvatar>
+                <ListItemText
+                  primary="Versicherung"
+                  secondary={selectedPatient.insuranceDisplay}
+                />
+              </ListItem>
+              <Divider />
+              <ListItem>
+                <ListItemAvatar>
+                  <Avatar sx={{ bgcolor: theme.palette.warning.main }}>
+                    <Phone />
+                  </Avatar>
+                </ListItemAvatar>
+                <ListItemText
+                  primary="Telefon"
+                  secondary={selectedPatient.phone_number || 'Nicht angegeben'}
+                />
+              </ListItem>
+              <Divider />
+              <ListItem>
+                <ListItemAvatar>
+                  <Avatar sx={{ bgcolor: theme.palette.secondary.main }}>
+                    <Email />
+                  </Avatar>
+                </ListItemAvatar>
+                <ListItemText
+                  primary="E-Mail"
+                  secondary={selectedPatient.email || 'Nicht angegeben'}
+                />
+              </ListItem>
+              <Divider />
+              <ListItem>
+                <ListItemAvatar>
+                  <Avatar sx={{ bgcolor: theme.palette.primary.main }}>
+                    <HomeIcon />
+                  </Avatar>
+                </ListItemAvatar>
+                <ListItemText
+                  primary="Adresse"
+                  secondary={selectedPatient.address || 'Nicht angegeben'}
+                />
+              </ListItem>
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <ModernButton onClick={handleMobileDetailClose}>
+            Schließen
+          </ModernButton>
+          <ModernButton
+            variant="contained"
+            onClick={handleMobileDetailView}
           >
-          <DataGrid
-            rows={patients}
-            columns={columns}
-            loading={loading}
-            rowCount={rowCount}
-            slots={{
-              toolbar: GridToolbar,
-            }}
-            slotProps={{
-              toolbar: {
-                showQuickFilter: true,
-                quickFilterProps: { debounceMs: 500 },
-              },
-            }}
-            initialState={{
-              pagination: {
-                paginationModel: {
-                  pageSize: 25,
-                },
-              },
-              sorting: {
-                sortModel: [{ field: 'fullName', sort: 'asc' }],
-              },
-            }}
-            pageSizeOptions={[10, 25, 50, 100]}
-            checkboxSelection
-            onRowClick={handleRowClick}
-            onRowSelectionModelChange={(newSelection) => {
-              setSelectedPatients(newSelection);
-            }}
-            sx={{
-              height: 'calc(100vh - 400px)',
-              border: 'none',
-              '& .MuiDataGrid-cell': {
-                borderBottom: `1px solid ${theme.palette.divider}`,
-                fontSize: '0.875rem',
-              },
-              '& .MuiDataGrid-columnHeaders': {
-                backgroundColor: theme.palette.grey[50],
-                borderBottom: `2px solid ${theme.palette.divider}`,
-                fontSize: '0.875rem',
-                fontWeight: 600,
-              },
-              '& .MuiDataGrid-row': {
-                cursor: 'pointer',
-                '&:hover': {
-                  backgroundColor: theme.palette.primary[50],
-                },
-                '&:nth-of-type(even)': {
-                  backgroundColor: theme.palette.grey[25],
-                },
-              },
-              '& .MuiDataGrid-cell:focus': {
-                outline: 'none',
-              },
-              '& .MuiDataGrid-toolbarContainer': {
-                padding: theme.spacing(2),
-                backgroundColor: theme.palette.background.paper,
-                borderBottom: `1px solid ${theme.palette.divider}`,
-              },
-            }}
-            density="comfortable"
-            localeText={{
-              toolbarDensity: 'Zeilenhöhe',
-              toolbarDensityLabel: 'Zeilenhöhe',
-              toolbarDensityCompact: 'Kompakt',
-              toolbarDensityStandard: 'Standard',
-              toolbarDensityComfortable: 'Komfortabel',
-              toolbarColumns: 'Spalten',
-              toolbarColumnsLabel: 'Spalten auswählen',
-              toolbarFilters: 'Filter',
-              toolbarFiltersLabel: 'Filter anzeigen',
-              toolbarFiltersTooltipHide: 'Filter ausblenden',
-              toolbarFiltersTooltipShow: 'Filter anzeigen',
-              toolbarQuickFilterPlaceholder: 'Suchen...',
-              toolbarExport: 'Export',
-              toolbarExportLabel: 'Export',
-              toolbarExportCSV: 'Als CSV exportieren',
-              toolbarExportPrint: 'Drucken',
-              noRowsLabel: 'Keine Patienten gefunden',
-              footerRowSelected: (count) => `${count} Patienten ausgewählt`,
-              columnMenuLabel: 'Menü',
-              columnMenuShowColumns: 'Spalten anzeigen',
-              columnMenuFilter: 'Filter',
-              columnMenuHideColumn: 'Spalte ausblenden',
-              columnMenuUnsort: 'Sortierung aufheben',
-              columnMenuSortAsc: 'Aufsteigend sortieren',
-              columnMenuSortDesc: 'Absteigend sortieren',
-            }}
-          />
-          </ModernCard>
-        </LoadingOverlay>
-      </Container>
-    </Box>
+            Details anzeigen
+          </ModernButton>
+        </DialogActions>
+      </Dialog>
+    </UnifiedPageLayout>
   );
 }
 

@@ -19,19 +19,8 @@ export const NOTIFICATION_STATUS = {
   ARCHIVED: 'archived'
 };
 
-// Mock-Benachrichtigungen für Demo-Zwecke (nur als Fallback)
-const mockNotifications = [
-  {
-    id: 1,
-    type: NOTIFICATION_TYPES.APPOINTMENT,
-    title: 'Neuer Termin',
-    message: 'Termin für Patient Max Mustermann um 14:00 Uhr',
-    status: NOTIFICATION_STATUS.UNREAD,
-    timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-    priority: 'medium',
-    actionUrl: '/appointments/123'
-  }
-];
+// Fallback-Benachrichtigungen (leer)
+const fallbackNotifications = [];
 
 class NotificationService {
   constructor() {
@@ -77,8 +66,8 @@ class NotificationService {
       console.log('NotificationService erfolgreich initialisiert');
     } catch (error) {
       console.error('Error initializing notification service:', error);
-      // Fallback zu Mock-Daten
-      this.notifications = [...mockNotifications];
+      // Fallback zu leeren Daten
+      this.notifications = [...fallbackNotifications];
       this.unreadCount = this.getUnreadCount();
       this.notifyListeners();
       this.isInitialized = true;
@@ -529,9 +518,9 @@ class NotificationService {
     }
   }
 
-  // Benachrichtigungen zurücksetzen (für Demo)
-  resetToDemo() {
-    this.notifications = [...mockNotifications];
+  // Benachrichtigungen zurücksetzen
+  resetNotifications() {
+    this.notifications = [...fallbackNotifications];
     this.unreadCount = this.getUnreadCount();
     this.notifyListeners();
     this.saveToStorage();

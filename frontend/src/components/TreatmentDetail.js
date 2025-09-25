@@ -22,7 +22,10 @@ import {
   Home as HomeIcon,
   Edit as EditIcon,
   LocalHospital as InsuranceIcon,
-  Receipt as ReceiptIcon
+  Receipt as ReceiptIcon,
+  Code as CodeIcon,
+  CheckCircle as CheckCircleIcon,
+  Cancel as CancelIcon
 } from '@mui/icons-material';
 
 function TreatmentDetail() {
@@ -133,40 +136,87 @@ function TreatmentDetail() {
             </Card>
           </Grid>
 
-          {/* Versicherungsinformationen */}
+          {/* Selbstzahler-Informationen */}
           <Grid item xs={12} md={6}>
             <Card variant="outlined" sx={{ height: '100%' }}>
               <CardContent>
                 <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <InsuranceIcon color="primary" />
-                  Versicherungsinformationen
+                  <MoneyIcon color="primary" />
+                  Selbstzahler
                 </Typography>
                 <Grid container spacing={2}>
                   <Grid item xs={12}>
                     <Chip
-                      label={treatment.insurance_coverage ? 'Kassenleistung' : 'Keine Kassenleistung'}
-                      color={treatment.insurance_coverage ? 'success' : 'default'}
+                      label={treatment.is_self_pay ? 'Selbstzahler-Behandlung' : 'Keine Selbstzahler-Behandlung'}
+                      color={treatment.is_self_pay ? 'warning' : 'default'}
                       sx={{ mb: 1 }}
                     />
                   </Grid>
-                  {treatment.insurance_coverage && (
+                  {treatment.is_self_pay && (
+                    <Grid item xs={12}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <MoneyIcon color="action" />
+                        <Typography>
+                          Preis: <strong>{treatment.self_pay_price} €</strong>
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  )}
+                </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* GKV-Abrechnung (LEGS-Code) */}
+          <Grid item xs={12} md={6}>
+            <Card variant="outlined" sx={{ height: '100%' }}>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <CodeIcon color="primary" />
+                  GKV-Abrechnung (LEGS-Code)
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12}>
+                    <Chip
+                      label={treatment.is_gkv_billable ? 'GKV-abrechenbar' : 'Nicht GKV-abrechenbar'}
+                      color={treatment.is_gkv_billable ? 'success' : 'default'}
+                      icon={treatment.is_gkv_billable ? <CheckCircleIcon /> : <CancelIcon />}
+                      sx={{ mb: 1 }}
+                    />
+                  </Grid>
+                  {treatment.legs_code_display && treatment.legs_code_display !== 'Nicht definiert' && (
                     <>
                       <Grid item xs={12}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <ReceiptIcon color="action" />
+                          <CodeIcon color="action" />
                           <Typography>
-                            GOÄ-Nummer: <strong>{treatment.goae_number || 'Nicht angegeben'}</strong>
+                            LEGS-Code: <strong>{treatment.legs_code_display}</strong>
                           </Typography>
                         </Box>
                       </Grid>
-                      <Grid item xs={12}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <MoneyIcon color="action" />
-                          <Typography>
-                            Kassensatz: <strong>{treatment.insurance_rate || 'Nicht angegeben'}</strong>
+                      {treatment.accounting_code && (
+                        <Grid item xs={12}>
+                          <Typography variant="body2" color="text.secondary">
+                            AC: {treatment.accounting_code} | TK: {treatment.tariff_indicator}
                           </Typography>
-                        </Box>
-                      </Grid>
+                        </Grid>
+                      )}
+                      {treatment.prescription_type_indicator && (
+                        <Grid item xs={12}>
+                          <Typography variant="body2" color="text.secondary">
+                            Verordnungsart: {treatment.prescription_type_indicator}
+                          </Typography>
+                        </Grid>
+                      )}
+                      {treatment.is_telemedicine && (
+                        <Grid item xs={12}>
+                          <Chip
+                            label="Telemedizinische Leistung"
+                            color="info"
+                            size="small"
+                          />
+                        </Grid>
+                      )}
                     </>
                   )}
                 </Grid>

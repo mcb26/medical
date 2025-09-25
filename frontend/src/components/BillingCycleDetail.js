@@ -122,8 +122,8 @@ function BillingCycleDetail() {
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 2 }}>
               <Typography variant="h6" gutterBottom>Finanzielle Übersicht</Typography>
-              <Typography><strong>Gesamtbetrag KK:</strong> {billingCycle.total_insurance_amount?.toFixed(2)} €</Typography>
-              <Typography><strong>Gesamtzuzahlung:</strong> {billingCycle.total_patient_copay?.toFixed(2)} €</Typography>
+              <Typography><strong>Gesamtbetrag KK:</strong> {formatCurrency(billingCycle.total_insurance_amount)} €</Typography>
+              <Typography><strong>Gesamtzuzahlung:</strong> {formatCurrency(billingCycle.total_patient_copay)} €</Typography>
               <Typography><strong>Anzahl Positionen:</strong> {billingItems.length}</Typography>
             </Paper>
           </Grid>

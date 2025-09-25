@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  Box, 
-  Paper, 
-  Button,
-  Typography 
+  Box
 } from '@mui/material';
-import { DataGrid, GridToolbar } from '@mui/x-data-grid';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
+import { isAuthenticated } from '../services/auth';
+import UnifiedPageLayout from './common/UnifiedPageLayout';
+import ModernButton from './common/ModernButton';
+import { Add as AddIcon, PlayArrow as PlayIcon } from '@mui/icons-material';
 
 function BillingCycleList() {
   const [billingCycles, setBillingCycles] = useState([]);
@@ -17,6 +17,8 @@ function BillingCycleList() {
   const navigate = useNavigate();
 
   const fetchBillingCycles = useCallback(async () => {
+    if (!isAuthenticated()) return;
+    
     try {
       const response = await api.get('/billing-cycles/');
       const formattedCycles = response.data.map(cycle => ({
@@ -35,8 +37,12 @@ function BillingCycleList() {
   }, []);
 
   useEffect(() => {
+    if (!isAuthenticated()) {
+      navigate('/login');
+      return;
+    }
     fetchBillingCycles();
-  }, [fetchBillingCycles]);
+  }, [fetchBillingCycles, navigate]);
 
   const getStatusLabel = (status) => {
     const labels = {
@@ -48,124 +54,42 @@ function BillingCycleList() {
     return labels[status] || status;
   };
 
-  const handleStartBulkBilling = async () => {
-    try {
-      const startDate = prompt('Startdatum (YYYY-MM-DD):');
-      const endDate = prompt('Enddatum (YYYY-MM-DD):');
-      
-      if (!startDate || !endDate) {
-        alert('Bitte geben Sie Start- und Enddatum ein.');
-        return;
-      }
-
-      // Validierung der Datumsformate
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      
-      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-        alert('Bitte geben Sie gültige Datumsformate ein (YYYY-MM-DD).');
-        return;
-      }
-
-      if (start >= end) {
-        alert('Das Enddatum muss nach dem Startdatum liegen.');
-        return;
-      }
-
-      const response = await api.post('/billing-cycles/bulk/', {
-        start_date: startDate,
-        end_date: endDate
-      });
-
-      // Zeige detaillierte Ergebnisse
-      let message = 'Massenabrechnung abgeschlossen:\n\n';
-      response.data.forEach(result => {
-        message += `${result.insurance_provider}: ${result.status}\n`;
-        if (result.status === 'success') {
-          message += `  - ${result.appointments_count} Termine\n`;
-          message += `  - KK-Betrag: ${result.total_insurance_amount} €\n`;
-          message += `  - Zuzahlung: ${result.total_patient_copay} €\n`;
-        } else if (result.status === 'error') {
-          message += `  - Fehler: ${result.message}\n`;
-        } else {
-          message += `  - ${result.message}\n`;
-        }
-        message += '\n';
-      });
-
-      alert(message);
-      fetchBillingCycles(); // Liste aktualisieren
-    } catch (error) {
-      console.error('Fehler bei der Massenabrechnung:', error);
-      const errorMessage = error.response?.data?.error || 
-                          error.response?.data?.message || 
-                          'Unbekannter Fehler bei der Massenabrechnung';
-      alert(`Fehler bei der Massenabrechnung: ${errorMessage}`);
-    }
-  };
-
   const columns = [
+    {
+      field: 'id',
+      headerName: 'ID',
+      width: 80,
+      sortable: true,
+    },
     {
       field: 'insurance_provider_name',
       headerName: 'Krankenkasse',
       width: 200,
-      filterable: true,
+      sortable: true,
     },
     {
       field: 'formattedStartDate',
-      headerName: 'Von',
+      headerName: 'Startdatum',
       width: 120,
-      filterable: true,
+      sortable: true,
     },
     {
       field: 'formattedEndDate',
-      headerName: 'Bis',
+      headerName: 'Enddatum',
       width: 120,
-      filterable: true,
+      sortable: true,
     },
     {
       field: 'statusDisplay',
       headerName: 'Status',
       width: 150,
-      filterable: true,
-      renderCell: (params) => (
-        <Box
-          sx={{
-            backgroundColor: 
-              params.value === 'Abgeschlossen' ? '#4caf50' :
-              params.value === 'Exportiert' ? '#2196f3' :
-              params.value === 'Bereit zum Export' ? '#ff9800' : '#9e9e9e',
-            color: 'white',
-            padding: '4px 8px',
-            borderRadius: '4px',
-            fontSize: '0.875rem'
-          }}
-        >
-          {params.value}
-        </Box>
-      ),
+      sortable: true,
     },
     {
-      field: 'total_insurance_amount',
-      headerName: 'KK-Betrag',
-      width: 150,
-      filterable: true,
-      renderCell: (params) => (
-        <Typography>
-          {params.value ? `${parseFloat(params.value).toFixed(2)} €` : '0.00 €'}
-        </Typography>
-      ),
-    },
-    {
-      field: 'total_patient_copay',
-      headerName: 'Zuzahlung',
-      width: 150,
-      filterable: true,
-      renderCell: (params) => (
-        <Typography>
-          {params.value ? `${parseFloat(params.value).toFixed(2)} €` : '0.00 €'}
-        </Typography>
-      ),
+      field: 'formattedAmount',
+      headerName: 'Betrag',
+      width: 120,
+      sortable: true,
     },
     {
       field: 'actions',
@@ -174,96 +98,56 @@ function BillingCycleList() {
       sortable: false,
       renderCell: (params) => (
         <Box>
-          <Button 
+          <ModernButton 
             variant="outlined" 
             size="small"
             onClick={() => navigate(`/billing-cycles/${params.row.id}`)}
             sx={{ mr: 1 }}
           >
             Details
-          </Button>
-          <Button 
+          </ModernButton>
+          <ModernButton 
             variant="outlined" 
             size="small"
             onClick={() => navigate(`/billing-cycles/${params.row.id}/edit`)}
           >
             Bearbeiten
-          </Button>
+          </ModernButton>
         </Box>
       ),
     }
   ];
 
-  return (
-    <Box sx={{ height: 'calc(100vh - 80px)', p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-        <Typography variant="h4">Abrechnungszyklen</Typography>
-        <Box>
-          <Button 
-            variant="contained" 
-            onClick={() => navigate('/billing-cycles/bulk')}
-            sx={{ mr: 2 }}
-          >
-            Massenabrechnung starten
-          </Button>
-          <Button 
-            variant="contained" 
-            onClick={() => navigate('/billing-cycles/new')}
-          >
-            Neue Abrechnung
-          </Button>
-        </Box>
-      </Box>
+  const actions = [
+    {
+      label: 'Massenabrechnung starten',
+      variant: 'contained',
+      icon: <PlayIcon />,
+      onClick: () => navigate('/billing-cycles/bulk'),
+    },
+    {
+      label: 'Neue Abrechnung',
+      variant: 'contained',
+      icon: <AddIcon />,
+      onClick: () => navigate('/billing-cycles/new'),
+    },
+  ];
 
-      <Paper sx={{ height: '100%', width: '100%' }}>
-        <DataGrid
-          rows={billingCycles}
-          columns={columns}
-          loading={loading}
-          slots={{
-            toolbar: GridToolbar,
-          }}
-          slotProps={{
-            toolbar: {
-              showQuickFilter: true,
-              quickFilterProps: { debounceMs: 500 },
-            },
-          }}
-          initialState={{
-            pagination: {
-              paginationModel: {
-                pageSize: 25,
-              },
-            },
-          }}
-          pageSizeOptions={[10, 25, 50, 100]}
-          onRowClick={(params) => navigate(`/billing-cycles/${params.row.id}`)}
-          sx={{
-            '& .MuiDataGrid-row': {
-              cursor: 'pointer',
-              '&:hover': {
-                backgroundColor: 'rgba(0, 0, 0, 0.04)',
-              },
-            },
-          }}
-          density="compact"
-          localeText={{
-            toolbarDensity: 'Zeilenhöhe',
-            toolbarDensityLabel: 'Zeilenhöhe',
-            toolbarDensityCompact: 'Kompakt',
-            toolbarDensityStandard: 'Standard',
-            toolbarDensityComfortable: 'Komfortabel',
-            toolbarColumns: 'Spalten',
-            toolbarColumnsLabel: 'Spalten auswählen',
-            toolbarFilters: 'Filter',
-            toolbarFiltersLabel: 'Filter anzeigen',
-            toolbarFiltersTooltipHide: 'Filter ausblenden',
-            toolbarFiltersTooltipShow: 'Filter anzeigen',
-            toolbarQuickFilterPlaceholder: 'Suchen...',
-          }}
-        />
-      </Paper>
-    </Box>
+  return (
+    <UnifiedPageLayout
+      title="Abrechnungszyklen"
+      subtitle="Verwalten Sie Ihre Abrechnungszyklen und Massenabrechnungen"
+      actions={actions}
+      onRefresh={fetchBillingCycles}
+      showDataGrid={true}
+      dataGridProps={{
+        rows: billingCycles,
+        columns: columns,
+        loading: loading,
+        rowCount: billingCycles.length,
+        onRowClick: (params) => navigate(`/billing-cycles/${params.row.id}`),
+      }}
+    />
   );
 }
 

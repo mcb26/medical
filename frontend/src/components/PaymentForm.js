@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Box, TextField, MenuItem, Button, Typography } from '@mui/material';
-import axios from 'axios';
+import api from '../api/axios';
 
 function PaymentForm() {
   const [invoices, setInvoices] = useState([]);
   const [formData, setFormData] = useState({
     invoice: '',
     amount: '',
-    payment_method: '',
+    payment_method: 'cash',
   });
 
   useEffect(() => {
@@ -16,9 +16,7 @@ function PaymentForm() {
 
   const fetchInvoices = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/invoices/', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
-      });
+      const response = await api.get('/invoices/');
       setInvoices(response.data);
     } catch (error) {
       console.error('Error fetching invoices:', error);
@@ -35,10 +33,8 @@ function PaymentForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('http://localhost:8000/api/payments/', formData, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
-      });
-      alert('Payment successfully created!');
+      await api.post('/payments/', formData);
+      alert('Payment created successfully!');
     } catch (error) {
       console.error('Error creating payment:', error);
     }
