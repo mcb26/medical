@@ -3,17 +3,12 @@ import {
   Box,
   Paper,
   Typography,
-  Divider,
   Grid,
   TextField,
   Switch,
   FormControlLabel,
   Button,
   Alert,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
   IconButton,
   Tabs,
   Tab,
@@ -26,14 +21,12 @@ import {
 } from '@mui/material';
 import {
   Save as SaveIcon,
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  Edit as EditIcon,
   Refresh as RefreshIcon,
   Help as HelpIcon,
   Warning as WarningIcon
 } from '@mui/icons-material';
 import api from '../api/axios';
+import UserInitialsManagement from './UserInitialsManagement';
 
 function Settings() {
   const [activeTab, setActiveTab] = useState(0);
@@ -188,6 +181,7 @@ function Settings() {
           <Tab label="Therapie" />
           <Tab label="Benachrichtigungen" />
           <Tab label="Abrechnung" />
+          <Tab label="Benutzer-Kürzel" />
         </Tabs>
 
         <Box sx={{ p: 3 }}>
@@ -338,6 +332,10 @@ function Settings() {
                 />
               </Grid>
             </Grid>
+          )}
+
+          {activeTab === 4 && (
+            <UserInitialsManagement />
           )}
         </Box>
 

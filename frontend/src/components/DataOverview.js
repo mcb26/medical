@@ -7,8 +7,6 @@ import {
   CircularProgress,
   Alert,
   Button,
-  TextField,
-  InputAdornment,
   Typography,
   Grid,
   Card,
@@ -19,25 +17,7 @@ import {
   Event as EventIcon,
   LocalHospital as TreatmentIcon,
   Description as PrescriptionIcon,
-  MeetingRoom as RoomIcon,
-  HealthAndSafety as DoctorIcon,
-  AccountBalance as InsuranceIcon,
-  Category as CategoryIcon,
-  School as SpecializationIcon,
-  Code as ICDCodeIcon,
-  LocalHospital as DiagnosisIcon,
-  Receipt as BillingIcon,
-  AddCircle as SurchargeIcon,
-  ContactPhone as EmergencyContactIcon,
-  Settings as SettingsIcon,
-  CalendarToday as CalendarIcon,
-  LocationCity as BundeslandIcon,
-  BeachAccess as HolidayIcon,
-  Schedule as WorkingHourIcon,
-  Business as PracticeIcon,
-  Group as InsuranceGroupIcon,
   Add as AddIcon,
-  Search as SearchIcon,
   Download as DownloadIcon,
   Print as PrintIcon,
   Refresh as RefreshIcon,
@@ -75,7 +55,6 @@ function DataOverview() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
   const [selectedRows, setSelectedRows] = useState([]);
   const [stats, setStats] = useState({});
   const navigate = useNavigate();
@@ -246,7 +225,7 @@ function DataOverview() {
           </Typography>
         </Box>
         <Typography variant="h4" component="div" sx={{ color }}>
-          {value}
+          {typeof value === 'object' ? JSON.stringify(value) : value}
         </Typography>
       </CardContent>
     </Card>
@@ -322,37 +301,37 @@ function DataOverview() {
     return columns[key] || [];
   };
 
-  const getCreatePath = (key) => {
-    const paths = {
-      patients: '/patients/new',
-      appointments: '/appointments/new',
-      prescriptions: '/prescriptions/new',
-      treatments: '/treatments/new',
-      practitioners: '/practitioners/new',
-      rooms: '/rooms/new',
-      doctors: '/doctors/new',
-      insuranceProviders: '/insurance-providers/new',
-      insuranceProviderGroups: '/insurance-provider-groups/new',
-      categories: '/categories/new',
-      specializations: '/specializations/new',
-      icdCodes: '/icdcodes/new',
-      diagnosisGroups: '/diagnosis-groups/new',
-      billingCycles: '/billing-cycles/new',
-      surcharges: '/surcharges/new',
-      emergencyContacts: '/emergency-contacts/new',
-      practiceSettings: '/practice-settings',
-      calendarSettings: '/settings/new',
-      bundeslaender: '/bundesland/new',
-      localHolidays: '/local-holidays/new',
-      workingHours: '/working-hours/new',
-      practices: '/practice/new'
-    };
-    return paths[key] || '/';
-  };
+  // const getCreatePath = (key) => {
+  //   const paths = {
+  //     patients: '/patients/new',
+  //     appointments: '/appointments/new',
+  //     prescriptions: '/prescriptions/new',
+  //     treatments: '/treatments/new',
+  //     practitioners: '/practitioners/new',
+  //     rooms: '/rooms/new',
+  //     doctors: '/doctors/new',
+  //     insuranceProviders: '/insurance-providers/new',
+  //     insuranceProviderGroups: '/insurance-provider-groups/new',
+  //     categories: '/categories/new',
+  //     specializations: '/specializations/new',
+  //     icdCodes: '/icdcodes/new',
+  //     diagnosisGroups: '/diagnosis-groups/new',
+  //     billingCycles: '/billing-cycles/new',
+  //     surcharges: '/surcharges/new',
+  //     emergencyContacts: '/emergency-contacts/new',
+  //     practiceSettings: '/practice-settings',
+  //     calendarSettings: '/settings/new',
+  //     bundeslaender: '/bundesland/new',
+  //     localHolidays: '/local-holidays/new',
+  //     workingHours: '/working-hours/new',
+  //     practices: '/practice/new'
+  //   };
+  //   return paths[key] || '/';
+  // };
 
-  const handleCreate = (key) => {
-    navigate(getCreatePath(key));
-  };
+  // const handleCreate = (key) => {
+  //   navigate(getCreatePath(key));
+  // };
 
   if (loading) {
     return (
@@ -378,16 +357,16 @@ function DataOverview() {
 
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} md={3}>
-          {renderStatsCard('Patienten', stats.patients || 0, PersonIcon, '#1976d2')}
+          {renderStatsCard('Patienten', (stats.patients && stats.patients.total) || 0, PersonIcon, '#1976d2')}
         </Grid>
         <Grid item xs={12} md={3}>
-          {renderStatsCard('Termine', stats.appointments || 0, EventIcon, '#2e7d32')}
+          {renderStatsCard('Termine', (stats.appointments && stats.appointments.total) || 0, EventIcon, '#2e7d32')}
         </Grid>
         <Grid item xs={12} md={3}>
-          {renderStatsCard('Behandlungen', stats.treatments || 0, TreatmentIcon, '#ed6c02')}
+          {renderStatsCard('Behandlungen', (stats.treatments && stats.treatments.total) || 0, TreatmentIcon, '#ed6c02')}
         </Grid>
         <Grid item xs={12} md={3}>
-          {renderStatsCard('Rezepte', stats.prescriptions || 0, PrescriptionIcon, '#9c27b0')}
+          {renderStatsCard('Rezepte', (stats.prescriptions && stats.prescriptions.total) || 0, PrescriptionIcon, '#9c27b0')}
         </Grid>
       </Grid>
 

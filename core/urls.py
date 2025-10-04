@@ -8,7 +8,9 @@ from core.views.views import (
     SurchargeViewSet, AbsenceViewSet, WorkingHourViewSet, PracticeViewSet,
     DashboardStatsView, UserDetailView, GenerateAppointmentsPreviewView,
     WaitlistViewSet, EmergencyContactViewSet, SpecializationViewSet, DiagnosisGroupViewSet, LocalHolidayViewSet, PaymentViewSet,
-    CalendarSettingsViewSet, PracticeSettingsViewSet, PatientInsuranceViewSet
+    CalendarSettingsViewSet, PracticeSettingsViewSet, PatientInsuranceViewSet,
+    TreatmentTypeViewSet, PriceListViewSet, TreatmentPriceViewSet, UserPreferenceViewSet,
+    AuditLogViewSet, UserInitialsViewSet
 )
 from core.views.user_views import UserViewSet, UserRoleViewSet
 from core.views.billing_views import (
@@ -48,6 +50,12 @@ router.register(r'local-holidays', LocalHolidayViewSet)
 router.register(r'payments', PaymentViewSet)
 router.register(r'calendar-settings', CalendarSettingsViewSet)
 router.register(r'practice-settings', PracticeSettingsViewSet)
+router.register(r'user-preferences', UserPreferenceViewSet, basename='user-preferences')
+router.register(r'treatment-types', TreatmentTypeViewSet)
+router.register(r'price-lists', PriceListViewSet)
+router.register(r'treatment-prices', TreatmentPriceViewSet)
+router.register(r'audit-logs', AuditLogViewSet)
+router.register(r'user-initials', UserInitialsViewSet, basename='user-initials')
 
 urlpatterns = [
     path('', include(router.urls)),

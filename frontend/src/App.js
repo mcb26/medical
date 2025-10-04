@@ -93,6 +93,9 @@ import { PermissionProvider } from './hooks/usePermissions';
 import DebugPermissions from './components/DebugPermissions';
 import InvoiceOverview from './components/InvoiceOverview';
 import CopayInvoiceManager from './components/CopayInvoiceManager';
+import PriceManagement from './components/PriceManagement';
+import UserPreferences from './components/UserPreferences';
+import AuditLogViewer from './components/AuditLogViewer';
 
 
 function App() {
@@ -215,6 +218,9 @@ function App() {
           <Route path="/billing-cycles/bulk" element={<BulkBillingForm />} />
           <Route path="/invoices" element={<InvoiceOverview />} />
           <Route path="/copay-invoices" element={<CopayInvoiceManager />} />
+          <Route path="/preferences" element={<UserPreferences />} />
+          <Route path="/audit-logs" element={<AuditLogViewer />} />
+          <Route path="/price-management" element={<PriceManagement />} />
         </Route>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />

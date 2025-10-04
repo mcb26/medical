@@ -5,6 +5,7 @@ from django.utils import timezone
 from django.utils.timezone import now, make_aware
 from datetime import datetime, date, timedelta
 from django.db.models import Q, Sum
+from django.conf import settings
 from core.appointment_validators import (
     validate_conflict_for_appointment,
     validate_appointment_conflicts,
@@ -58,6 +59,12 @@ class CalendarSettings(models.Model):
 
     def __str__(self):
         return f"Calendar Settings"
+
+    # Erzwinge Singleton-Verhalten
+    def save(self, *args, **kwargs):
+        if not self.pk and CalendarSettings.objects.exists():
+            raise ValidationError('Es kann nur eine Kalender-Einstellung geben.')
+        super().save(*args, **kwargs)
 
 # ICDCode Model
 class ICDCode(models.Model):
@@ -219,6 +226,9 @@ class User(AbstractUser):
     
     # Therapeut-Status
     is_therapist = models.BooleanField(default=False, verbose_name="Ist Therapeut", help_text="Therapeuten sehen nur ihre eigenen Termine und Patienten")
+    
+    # Benutzer-Kürzel (nur Admin kann ändern)
+    initials = models.CharField(max_length=10, blank=True, verbose_name="Kürzel", help_text="Kürzel für Änderungshistorie (nur Admin kann ändern)")
     
     # Modul-Zugriffe
     can_access_patients = models.BooleanField(default=True, verbose_name="Patienten-Zugriff")
@@ -547,6 +557,86 @@ class EmergencyContact(models.Model):
     def __str__(self):
         return f"{self.first_name} {self.last_name} ({self.relationship})"
 
+# DSGVO: Einwilligungen zur Datenverarbeitung
+class DataProtectionConsent(models.Model):
+    patient = models.ForeignKey('Patient', related_name='data_consents', on_delete=models.CASCADE, verbose_name="Patient")
+    consent_given = models.BooleanField(default=False, verbose_name="Einwilligung erteilt")
+    consent_text_version = models.CharField(max_length=50, verbose_name="Textversion")
+    consent_text = models.TextField(verbose_name="Einwilligungstext")
+    consent_date = models.DateTimeField(auto_now_add=True, verbose_name="Einwilligungsdatum")
+    revoked = models.BooleanField(default=False, verbose_name="Widerrufen")
+    revoked_at = models.DateTimeField(null=True, blank=True, verbose_name="Widerrufsdatum")
+    valid_until = models.DateTimeField(null=True, blank=True, verbose_name="Gültig bis")
+
+    class Meta:
+        verbose_name = "Datenschutzeinwilligung"
+        verbose_name_plural = "Datenschutzeinwilligungen"
+        ordering = ['-consent_date']
+
+    def __str__(self):
+        status = "Widerrufen" if self.revoked else ("Erteilt" if self.consent_given else "Nicht erteilt")
+        return f"{self.patient} – {status} (v{self.consent_text_version})"
+
+    def is_active(self):
+        if self.revoked:
+            return False
+        if not self.consent_given:
+            return False
+        if self.valid_until and timezone.now() > self.valid_until:
+            return False
+        return True
+
+# Behandlungstypen für verschiedene Abrechnungsarten
+class TreatmentType(models.Model):
+    TREATMENT_TYPE_CHOICES = [
+        ('gkv', 'GKV/LEGS'),
+        ('private', 'Privatleistung'),
+        ('self_pay', 'Selbstzahler'),
+        ('mixed', 'Gemischt (GKV + Privat)'),
+    ]
+    
+    name = models.CharField(max_length=50, verbose_name="Behandlungstyp")
+    type_code = models.CharField(max_length=20, choices=TREATMENT_TYPE_CHOICES, verbose_name="Typ-Code")
+    description = models.TextField(blank=True, verbose_name="Beschreibung")
+    is_active = models.BooleanField(default=True, verbose_name="Aktiv")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Behandlungstyp"
+        verbose_name_plural = "Behandlungstypen"
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+# Preislisten für verschiedene Zeiträume
+class PriceList(models.Model):
+    name = models.CharField(max_length=100, verbose_name="Preislistenname")
+    treatment_type = models.ForeignKey(TreatmentType, on_delete=models.CASCADE, verbose_name="Behandlungstyp")
+    valid_from = models.DateField(verbose_name="Gültig ab")
+    valid_until = models.DateField(null=True, blank=True, verbose_name="Gültig bis")
+    is_active = models.BooleanField(default=True, verbose_name="Aktiv")
+    description = models.TextField(blank=True, verbose_name="Beschreibung")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Preisliste"
+        verbose_name_plural = "Preislisten"
+        ordering = ['-valid_from', 'name']
+
+    def __str__(self):
+        return f"{self.name} ({self.valid_from} - {self.valid_until or 'unbegrenzt'})"
+
+    def is_valid_on_date(self, date):
+        """Prüft ob die Preisliste an einem bestimmten Datum gültig ist"""
+        if date < self.valid_from:
+            return False
+        if self.valid_until and date > self.valid_until:
+            return False
+        return True
+
 # Doctor Model
 class Doctor(models.Model):
     practicename = models.CharField(max_length=100, null=True)
@@ -690,6 +780,12 @@ class PracticeSettings(models.Model):
     phone_number = models.CharField(max_length=20)
     email = models.EmailField(max_length=255)
     website = models.URLField(max_length=255, null=True, blank=True)
+
+    # Erzwinge Singleton-Verhalten
+    def save(self, *args, **kwargs):
+        if not self.pk and PracticeSettings.objects.exists():
+            raise ValidationError('Es kann nur eine Praxis-Einstellung geben.')
+        super().save(*args, **kwargs)
     opening_time = models.TimeField()
     closing_time = models.TimeField()
     days_open = models.CharField(max_length=100)
@@ -862,6 +958,78 @@ class Treatment(models.Model):
             'is_self_pay': self.is_self_pay,
             'self_pay_price': self.self_pay_price
         }
+
+# Preise für Behandlungen mit zeitlicher Gültigkeit
+class TreatmentPrice(models.Model):
+    treatment = models.ForeignKey(Treatment, on_delete=models.CASCADE, related_name='prices', verbose_name="Behandlung")
+    price_list = models.ForeignKey(PriceList, on_delete=models.CASCADE, verbose_name="Preisliste")
+    
+    # GKV/LEGS Preise
+    gkv_price = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        verbose_name="GKV-Preis (€)",
+        help_text="Preis nach GKV-Vergütung"
+    )
+    copayment_amount = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        verbose_name="Zuzahlung (€)",
+        help_text="Zuzahlungsbetrag des Patienten"
+    )
+    
+    # Privatleistung Preise
+    private_price = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        verbose_name="Privatpreis (€)",
+        help_text="Preis für Privatleistungen"
+    )
+    
+    # Selbstzahler Preise
+    self_pay_price = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        verbose_name="Selbstzahler-Preis (€)",
+        help_text="Preis für Selbstzahler"
+    )
+    
+    # Zusätzliche Informationen
+    notes = models.TextField(blank=True, verbose_name="Notizen")
+    is_active = models.BooleanField(default=True, verbose_name="Aktiv")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Behandlungspreis"
+        verbose_name_plural = "Behandlungspreise"
+        ordering = ['treatment__treatment_name', '-price_list__valid_from']
+        unique_together = ['treatment', 'price_list']
+
+    def __str__(self):
+        return f"{self.treatment.treatment_name} - {self.price_list.name}"
+
+    def get_price_for_type(self, price_type):
+        """Gibt den Preis für einen bestimmten Typ zurück"""
+        if price_type == 'gkv':
+            return self.gkv_price
+        elif price_type == 'private':
+            return self.private_price
+        elif price_type == 'self_pay':
+            return self.self_pay_price
+        return None
+
+    def is_valid_on_date(self, date):
+        """Prüft ob der Preis an einem bestimmten Datum gültig ist"""
+        return self.price_list.is_valid_on_date(date)
 
 # Surcharge Model
 class Surcharge(models.Model):
@@ -1538,23 +1706,65 @@ class Appointment(models.Model):
         if not self.can_be_billed():
             return None
         
-        # Wenn Verordnung vorhanden, verwende Surcharge
+        appointment_date = self.appointment_date.date()
+        
+        # Wenn Verordnung vorhanden, verwende Surcharge (kassengruppenspezifisch) oder TreatmentPrice als Fallback
         if self.prescription and self.prescription.patient_insurance:
+            # 1. Versuche Surcharge (kassengruppenspezifische Preise)
             try:
                 surcharge = Surcharge.objects.get(
                     treatment=self.treatment,
                     insurance_provider_group=self.prescription.patient_insurance.insurance_provider.group,
-                    valid_from__lte=self.appointment_date.date(),
-                    valid_until__gte=self.appointment_date.date()
+                    valid_from__lte=appointment_date,
+                    valid_until__gte=appointment_date
                 )
                 return {
                     'insurance_amount': surcharge.insurance_payment,
                     'patient_copay': surcharge.patient_payment
                 }
             except Surcharge.DoesNotExist:
-                return None
+                pass
+            
+            # 2. Fallback: TreatmentPrice (Basispreise)
+            try:
+                from .models import TreatmentPrice, PriceList
+                treatment_price = TreatmentPrice.objects.filter(
+                    treatment=self.treatment,
+                    price_list__valid_from__lte=appointment_date,
+                    is_active=True
+                ).filter(
+                    models.Q(price_list__valid_until__isnull=True) | models.Q(price_list__valid_until__gte=appointment_date)
+                ).first()
+                
+                if treatment_price:
+                    return {
+                        'insurance_amount': treatment_price.gkv_price or Decimal('0.00'),
+                        'patient_copay': treatment_price.copayment_amount or Decimal('0.00')
+                    }
+            except Exception:
+                pass
         
         # Ohne Verordnung: Selbstzahler-Preis
+        # 1. Versuche TreatmentPrice
+        try:
+            from .models import TreatmentPrice, PriceList
+            treatment_price = TreatmentPrice.objects.filter(
+                treatment=self.treatment,
+                price_list__valid_from__lte=appointment_date,
+                is_active=True
+            ).filter(
+                models.Q(price_list__valid_until__isnull=True) | models.Q(price_list__valid_until__gte=appointment_date)
+            ).first()
+            
+            if treatment_price and treatment_price.self_pay_price:
+                return {
+                    'insurance_amount': Decimal('0.00'),
+                    'patient_copay': treatment_price.self_pay_price
+                }
+        except Exception:
+            pass
+        
+        # 2. Fallback: Treatment.self_pay_price (deprecated)
         return {
             'insurance_amount': Decimal('0.00'),
             'patient_copay': self.treatment.self_pay_price if hasattr(self.treatment, 'self_pay_price') else Decimal('0.00')
@@ -1597,6 +1807,61 @@ class WorkingHour(models.Model):
 
     def __str__(self):
         return f"{self.practitioner} - {self.day_of_week}: {self.start_time} bis {self.end_time} (ab {self.valid_from})"
+
+# Benutzerpräferenzen (pro User, OneToOne)
+class UserPreference(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='preferences')
+    theme = models.CharField(max_length=20, default='light', verbose_name="Theme")  # light | dark | system
+    language = models.CharField(max_length=10, default='de', verbose_name="Sprache")
+    timezone = models.CharField(max_length=50, default='Europe/Berlin', verbose_name="Zeitzone")
+    default_calendar_view = models.CharField(max_length=20, default='timeGridWeek', verbose_name="Standard Kalenderansicht")
+    receive_email_notifications = models.BooleanField(default=True, verbose_name="E-Mail-Benachrichtigungen")
+    receive_sms_notifications = models.BooleanField(default=False, verbose_name="SMS-Benachrichtigungen")
+    default_room = models.ForeignKey('Room', on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Standardraum")
+    default_practitioner = models.ForeignKey('Practitioner', on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Standard-Behandler")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Benutzerpräferenz"
+        verbose_name_plural = "Benutzerpräferenzen"
+
+    def __str__(self):
+        return f"Präferenzen von {getattr(self.user, 'username', self.user_id)}"
+
+
+class AuditLog(models.Model):
+    """Änderungshistorie für alle wichtigen Modelle"""
+    ACTION_CHOICES = [
+        ('create', 'Erstellt'),
+        ('update', 'Geändert'),
+        ('delete', 'Gelöscht'),
+        ('view', 'Angesehen'),
+    ]
+    
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    user_initials = models.CharField(max_length=10, blank=True)  # Kürzel des Benutzers
+    model_name = models.CharField(max_length=100)  # Name des geänderten Models
+    object_id = models.PositiveIntegerField()  # ID des geänderten Objekts
+    action = models.CharField(max_length=10, choices=ACTION_CHOICES)
+    field_name = models.CharField(max_length=100, blank=True)  # Geändertes Feld
+    old_value = models.TextField(blank=True)  # Alter Wert
+    new_value = models.TextField(blank=True)  # Neuer Wert
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    notes = models.TextField(blank=True)  # Zusätzliche Notizen
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['model_name', 'object_id']),
+            models.Index(fields=['user', 'timestamp']),
+            models.Index(fields=['timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.get_action_display()} {self.model_name} #{self.object_id} von {self.user_initials or 'System'}"
 
 class SingletonManager(models.Manager):
     def get_or_create(self, **kwargs):

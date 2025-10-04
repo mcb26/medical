@@ -49,6 +49,16 @@ const login = async (username, password) => {
             
             // Benutzerprofil nach erfolgreichem Login laden
             await fetchUserProfile();
+            // Optional: lokale Benutzereinstellungen einmalig zum Server pushen (mit Auth)
+            try {
+                const localPrefsRaw = localStorage.getItem('userPrefs');
+                if (localPrefsRaw) {
+                    const prefs = JSON.parse(localPrefsRaw);
+                    await api.put('user-preferences/me', prefs);
+                }
+            } catch (e) {
+                console.warn('Migration lokaler Benutzereinstellungen fehlgeschlagen:', e);
+            }
             
             // NotificationService nach erfolgreichem Login initialisieren
             if (typeof window !== 'undefined') {

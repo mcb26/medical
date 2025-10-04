@@ -319,7 +319,9 @@ const CopayInvoiceManager = () => {
                   label="Von Datum (optional)"
                   value={createData.startDate}
                   onChange={(date) => setCreateData({ ...createData, startDate: date })}
-                  renderInput={(params) => <TextField {...params} fullWidth />}
+                  slotProps={{
+                    textField: { fullWidth: true }
+                  }}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -327,7 +329,9 @@ const CopayInvoiceManager = () => {
                   label="Bis Datum (optional)"
                   value={createData.endDate}
                   onChange={(date) => setCreateData({ ...createData, endDate: date })}
-                  renderInput={(params) => <TextField {...params} fullWidth />}
+                  slotProps={{
+                    textField: { fullWidth: true }
+                  }}
                 />
               </Grid>
               <Grid item xs={12} md={6}>

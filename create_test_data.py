@@ -246,6 +246,74 @@ def create_test_data():
         mld_45.legs_code = f"{mld_45.accounting_code}.{mld_45.tariff_indicator}"
         mld_45.save()
     treatments.append(mld_45)
+
+    # --- Zusätzliche Selbstzahler-/Privat-Leistungen ---
+    print("4. Erstelle zusätzliche Selbstzahler-/Privat-Leistungen...")
+
+    # Wellness-Massage 30min (nicht GKV)
+    wellness_massage_30, created = Treatment.objects.get_or_create(
+        treatment_name="Wellness-Massage 30min",
+        defaults={
+            "description": "Entspannungsmassage, keine GKV-Leistung",
+            "duration_minutes": 30,
+            "is_self_pay": True,
+            "self_pay_price": 35.00,
+            "is_telemedicine": False,
+        }
+    )
+    treatments.append(wellness_massage_30)
+
+    # Wellness-Massage 60min (nicht GKV)
+    wellness_massage_60, created = Treatment.objects.get_or_create(
+        treatment_name="Wellness-Massage 60min",
+        defaults={
+            "description": "Ganzkörper-Entspannungsmassage, keine GKV-Leistung",
+            "duration_minutes": 60,
+            "is_self_pay": True,
+            "self_pay_price": 65.00,
+            "is_telemedicine": False,
+        }
+    )
+    treatments.append(wellness_massage_60)
+
+    # Fußreflexzonenmassage 30min (nicht GKV)
+    fussreflex_30, created = Treatment.objects.get_or_create(
+        treatment_name="Fußreflexzonenmassage 30min",
+        defaults={
+            "description": "Fußreflexzonenmassage, keine GKV-Leistung",
+            "duration_minutes": 30,
+            "is_self_pay": True,
+            "self_pay_price": 39.00,
+            "is_telemedicine": False,
+        }
+    )
+    treatments.append(fussreflex_30)
+
+    # Kinesio-Taping (Preis pro Anlage)
+    kinesio_taping, created = Treatment.objects.get_or_create(
+        treatment_name="Kinesio-Taping",
+        defaults={
+            "description": "Kinesiologisches Taping, keine GKV-Leistung",
+            "duration_minutes": 10,
+            "is_self_pay": True,
+            "self_pay_price": 12.00,
+            "is_telemedicine": False,
+        }
+    )
+    treatments.append(kinesio_taping)
+
+    # Wärmebehandlung (Fango/Heißluft) als Selbstzahler-Variante
+    waerme_selbst, created = Treatment.objects.get_or_create(
+        treatment_name="Wärmebehandlung (Selbstzahler)",
+        defaults={
+            "description": "Zusatzleistung Wärme/Fango/Heißluft (privat)",
+            "duration_minutes": 20,
+            "is_self_pay": True,
+            "self_pay_price": 8.50,
+            "is_telemedicine": False,
+        }
+    )
+    treatments.append(waerme_selbst)
     
     # Manuelle Lymphdrainage 60min (X0202) - 63,40€
     mld_60, created = Treatment.objects.get_or_create(

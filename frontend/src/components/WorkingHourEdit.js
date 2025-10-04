@@ -175,7 +175,9 @@ function WorkingHourEdit() {
                   label="Gültig von"
                   value={formData.valid_from}
                   onChange={handleDateChange('valid_from')}
-                  renderInput={(params) => <TextField {...params} fullWidth required />}
+                  slotProps={{
+                    textField: { fullWidth: true, required: true }
+                  }}
                 />
               </LocalizationProvider>
             </Grid>
@@ -185,7 +187,9 @@ function WorkingHourEdit() {
                   label="Gültig bis"
                   value={formData.valid_until}
                   onChange={handleDateChange('valid_until')}
-                  renderInput={(params) => <TextField {...params} fullWidth />}
+                  slotProps={{
+                    textField: { fullWidth: true }
+                  }}
                   minDate={formData.valid_from}
                 />
               </LocalizationProvider>

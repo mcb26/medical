@@ -106,7 +106,9 @@ function BillingCycleEdit() {
                   label="Startdatum"
                   value={formData.start_date}
                   onChange={handleDateChange('start_date')}
-                  renderInput={(params) => <TextField {...params} fullWidth required />}
+                  slotProps={{
+                    textField: { fullWidth: true, required: true }
+                  }}
                 />
               </LocalizationProvider>
             </Grid>
@@ -116,7 +118,9 @@ function BillingCycleEdit() {
                   label="Enddatum"
                   value={formData.end_date}
                   onChange={handleDateChange('end_date')}
-                  renderInput={(params) => <TextField {...params} fullWidth required />}
+                  slotProps={{
+                    textField: { fullWidth: true, required: true }
+                  }}
                   minDate={formData.start_date}
                 />
               </LocalizationProvider>

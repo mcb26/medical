@@ -30,9 +30,14 @@ from core.models import (
     WorkingHour,
     Absence,
     Waitlist,
-    LocalHoliday
+    LocalHoliday,
+    TreatmentType,
+    PriceList,
+    TreatmentPrice,
+    UserPreference,
+    AuditLog
 )
-from core.serializers import AppointmentSerializer, AbsenceSerializer, WaitlistSerializer, LocalHolidaySerializer
+from core.serializers import AppointmentSerializer, AbsenceSerializer, WaitlistSerializer, LocalHolidaySerializer, DataProtectionConsentSerializer, TreatmentTypeSerializer, PriceListSerializer, TreatmentPriceSerializer, UserPreferenceSerializer, AuditLogSerializer, UserInitialsSerializer
 
 from core.services.billing_service import BillingService
 from core.services.propose_and_create_appointments import is_practitioner_available, is_room_available, is_within_practice_hours, propose_and_create_appointments
@@ -73,7 +78,8 @@ from ..models import (
     WorkingHour,
     Practice,
     BillingItem,
-    Payment
+    Payment,
+    DataProtectionConsent
 )
 from ..serializers import (
     BundeslandSerializer,
@@ -199,6 +205,19 @@ class PatientViewSet(viewsets.ModelViewSet):
         )
         serializer = AppointmentSerializer(appointments, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['get', 'post'], url_path='consents')
+    def consents(self, request, pk=None):
+        """Liste an Einwilligungen eines Patienten oder neue Einwilligung erstellen"""
+        patient = self.get_object()
+        if request.method == 'GET':
+            consents = DataProtectionConsent.objects.filter(patient=patient).order_by('-consent_date')
+            return Response(DataProtectionConsentSerializer(consents, many=True).data)
+        else:
+            serializer = DataProtectionConsentSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(patient=patient)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 class PatientInsuranceViewSet(viewsets.ModelViewSet):
     queryset = PatientInsurance.objects.all()
@@ -2196,6 +2215,30 @@ def settings_view(request):
                 if 'practice_email' in general_data:
                     practice_settings.email = general_data['practice_email']
                 # Adresse wird nicht direkt gespeichert, da sie aus mehreren Feldern besteht
+                # Optionales Mapping: zusammengesetzte Adresse -> Einzelteile
+                try:
+                    import re
+                    addr = general_data.get('practice_address')
+                    if addr and isinstance(addr, str):
+                        # Erwartetes Muster: "Straße Hausnr., PLZ Stadt"
+                        parts = [p.strip() for p in addr.split(',')]
+                        if len(parts) == 2:
+                            street = parts[0]
+                            m = re.match(r"^(?P<plz>\d{4,5})\s+(?P<city>.+)$", parts[1])
+                            if m:
+                                practice_settings.street_address = street
+                                practice_settings.postal_code = m.group('plz')
+                                practice_settings.city = m.group('city')
+                except Exception:
+                    # Silent fallback: Bei Parsing-Fehlern keine Änderung
+                    pass
+                # Falls Einzelteile explizit gesendet werden, haben diese Vorrang
+                if 'street_address' in general_data:
+                    practice_settings.street_address = general_data['street_address']
+                if 'postal_code' in general_data:
+                    practice_settings.postal_code = general_data['postal_code']
+                if 'city' in general_data:
+                    practice_settings.city = general_data['city']
             
             if 'notifications' in data:
                 notification_data = data['notifications']
@@ -2225,4 +2268,139 @@ def settings_view(request):
             {'error': f'Fehler bei der Settings-Operation: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+# ViewSets für das neue Preissystem
+class TreatmentTypeViewSet(viewsets.ModelViewSet):
+    queryset = TreatmentType.objects.all()
+    serializer_class = TreatmentTypeSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'type_code', 'description']
+    ordering_fields = ['name', 'created_at']
+    ordering = ['name']
+
+class PriceListViewSet(viewsets.ModelViewSet):
+    queryset = PriceList.objects.all()
+    serializer_class = PriceListSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'description']
+    ordering_fields = ['name', 'valid_from', 'created_at']
+    ordering = ['-valid_from', 'name']
+
+    @action(detail=False, methods=['get'])
+    def current(self, request):
+        """Gibt alle aktuell gültigen Preislisten zurück"""
+        from django.utils import timezone
+        today = timezone.now().date()
+        current_lists = self.queryset.filter(
+            valid_from__lte=today,
+            is_active=True
+        ).filter(
+            models.Q(valid_until__isnull=True) | models.Q(valid_until__gte=today)
+        )
+        serializer = self.get_serializer(current_lists, many=True)
+        return Response(serializer.data)
+
+class TreatmentPriceViewSet(viewsets.ModelViewSet):
+    queryset = TreatmentPrice.objects.all()
+    serializer_class = TreatmentPriceSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['treatment__treatment_name', 'price_list__name', 'notes']
+    ordering_fields = ['treatment__treatment_name', 'price_list__valid_from', 'created_at']
+    ordering = ['treatment__treatment_name', '-price_list__valid_from']
+
+    @action(detail=False, methods=['get'])
+    def current_prices(self, request):
+        """Gibt alle aktuell gültigen Preise zurück"""
+        from django.utils import timezone
+        today = timezone.now().date()
+        current_prices = self.queryset.filter(
+            price_list__valid_from__lte=today,
+            is_active=True
+        ).filter(
+            models.Q(price_list__valid_until__isnull=True) | models.Q(price_list__valid_until__gte=today)
+        )
+        serializer = self.get_serializer(current_prices, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def by_treatment(self, request):
+        """Gibt Preise für eine bestimmte Behandlung zurück"""
+        treatment_id = request.query_params.get('treatment_id')
+        if not treatment_id:
+            return Response({'error': 'treatment_id parameter required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        from django.utils import timezone
+        today = timezone.now().date()
+        prices = self.queryset.filter(
+            treatment_id=treatment_id,
+            price_list__valid_from__lte=today,
+            is_active=True
+        ).filter(
+            models.Q(price_list__valid_until__isnull=True) | models.Q(price_list__valid_until__gte=today)
+        )
+        serializer = self.get_serializer(prices, many=True)
+        return Response(serializer.data)
+
+class UserPreferenceViewSet(viewsets.ModelViewSet):
+    queryset = UserPreference.objects.all()
+    serializer_class = UserPreferenceSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # Benutzer dürfen nur die eigenen Präferenzen sehen/bearbeiten
+        if self.request.user.is_superuser:
+            return super().get_queryset()
+        return super().get_queryset().filter(user=self.request.user)
+
+    @action(detail=False, methods=['get', 'post', 'put'], url_path='me')
+    def me(self, request):
+        """Eigene Präferenzen holen/setzen"""
+        pref, _ = UserPreference.objects.get_or_create(user=request.user)
+        if request.method in ['POST', 'PUT']:
+            serializer = self.get_serializer(pref, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(user=request.user)
+            return Response(serializer.data)
+        serializer = self.get_serializer(pref)
+        return Response(serializer.data)
+
+
+class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet für Änderungshistorie (nur lesen)"""
+    queryset = AuditLog.objects.all()
+    serializer_class = AuditLogSerializer
+    permission_classes = [IsAuthenticated]
+    filterset_fields = ['model_name', 'action', 'user', 'timestamp']
+    ordering = ['-timestamp']
+    
+    def get_queryset(self):
+        # Benutzer sehen nur relevante Logs
+        if self.request.user.is_superuser:
+            return super().get_queryset()
+        # Filtere nach Benutzer oder allgemeine Logs
+        return super().get_queryset().filter(
+            Q(user=self.request.user) | Q(user__isnull=True)
+        )
+
+
+class UserInitialsViewSet(viewsets.ModelViewSet):
+    """ViewSet für Benutzer-Kürzel-Verwaltung (nur Admin)"""
+    queryset = User.objects.all()
+    serializer_class = UserInitialsSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_permissions(self):
+        # Nur Admins können Kürzel ändern
+        if self.action in ['update', 'partial_update', 'destroy']:
+            permission_classes = [IsAuthenticated, IsAdminUser]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
+    
+    def get_queryset(self):
+        # Alle Benutzer anzeigen, aber nur Admins können ändern
+        return User.objects.filter(is_active=True).order_by('username')
 

@@ -13,7 +13,6 @@ import {
   useTheme,
   useMediaQuery,
   Badge,
-  IconButton,
   Collapse,
   Typography
 } from '@mui/material';
@@ -32,9 +31,8 @@ import {
   TableChart as TableChartIcon,
   Settings as SettingsIcon,
   Receipt as ReceiptIcon,
-  ExpandLess,
-  ExpandMore,
-  KeyboardArrowRight as ArrowRightIcon
+  KeyboardArrowRight as ArrowRightIcon,
+  History as HistoryIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { usePermissions } from '../hooks/usePermissions';
@@ -44,7 +42,7 @@ function SidebarMenu({ drawerOpen, toggleDrawer }) {
   const navigate = useNavigate();
   const location = useLocation();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const { permissions, hasPermission } = usePermissions();
+  const { hasPermission } = usePermissions();
   const [expandedItems, setExpandedItems] = useState({});
 
   // Event Listener für Permissions-Updates
@@ -150,6 +148,13 @@ function SidebarMenu({ drawerOpen, toggleDrawer }) {
           path: '/copay-invoices',
           description: 'Zuzahlungsrechnungen aus Terminen erstellen',
           badge: null
+        },
+        {
+          text: 'Preisverwaltung',
+          icon: <EuroIcon />,
+          path: '/price-management',
+          description: 'Preise für GKV, Privat und Selbstzahler verwalten',
+          badge: null
         }
       ]
     },
@@ -190,18 +195,32 @@ function SidebarMenu({ drawerOpen, toggleDrawer }) {
           path: '/settings',
           description: 'Systemeinstellungen',
           badge: null
+        },
+        {
+          text: 'Profil & Einstellungen',
+          icon: <AdminIcon />,
+          path: '/preferences',
+          description: 'Benutzerprofil und persönliche Einstellungen',
+          badge: null
+        },
+        {
+          text: 'Änderungshistorie',
+          icon: <HistoryIcon />,
+          path: '/audit-logs',
+          description: 'Verfolgung aller Datenänderungen',
+          badge: null
         }
       ]
     }
   ];
 
   // Toggle für expandierte Menü-Items
-  const handleExpandToggle = (groupName) => {
-    setExpandedItems(prev => ({
-      ...prev,
-      [groupName]: !prev[groupName]
-    }));
-  };
+  // const handleExpandToggle = (groupName) => {
+  //   setExpandedItems(prev => ({
+  //     ...prev,
+  //     [groupName]: !prev[groupName]
+  //   }));
+  // };
 
   // Navigation-Handler
   const handleNavigation = (path) => {
@@ -238,7 +257,8 @@ function SidebarMenu({ drawerOpen, toggleDrawer }) {
       '/notifications': ['notifications', 'read'],
       '/admin-panel': ['users', 'read'],
       '/dataoverview': ['reports', 'read'],
-      '/settings': ['settings', 'read']
+      '/settings': ['settings', 'read'],
+      '/audit-logs': ['reports', 'read']
     };
 
     const [module, action] = permissionMap[item.path] || ['general', 'read'];
